@@ -39,7 +39,7 @@ class Slice;
 
 namespace arangodb::aql {
 
-struct AqlCall {
+struct AqlCall {  // 偏移量+跳过计数+软硬件限制
   // TODO We currently have softLimit and hardLimit, where both can be a number
   //      or Infinity - but not both may be non-infinite at the same time.
   //      In addition, fullCount does only make sense together with a hard
@@ -293,7 +293,7 @@ auto operator<<(std::ostream& out,
                 arangodb::aql::AqlCall::LimitPrinter const& limit)
     -> std::ostream&;
 
-auto operator<<(std::ostream& out, arangodb::aql::AqlCall const& call)
-    -> std::ostream&;
+auto operator<<(std::ostream& out,
+                arangodb::aql::AqlCall const& call) -> std::ostream&;
 
 }  // namespace arangodb::aql

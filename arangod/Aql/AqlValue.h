@@ -337,6 +337,7 @@ struct AqlValue final {
   /// @brief AqlValues can be copied and moved as required
   /// memory management is not performed via AqlValue destructor but via
   /// explicit calls to destroy()
+  // AqlValues 需要被显示的调用destroy()
   AqlValue(AqlValue const&) noexcept = default;
   AqlValue& operator=(AqlValue const&) noexcept = default;
   AqlValue(AqlValue&&) noexcept = default;

@@ -794,7 +794,7 @@ all_shortest_paths_graph_info:
 
 for_statement:
     T_FOR for_output_variables T_IN expression {
-      AstNode* variablesNode = static_cast<AstNode*>($2);
+      AstNode* variablesNode = static_cast<AstNode*>($2);//这个是数组节点
       ::checkOutVariables(parser, variablesNode, 1, 1, "Collections and views FOR loops only allow a single return variable", yyloc);
       parser->ast()->scopes()->start(arangodb::aql::AQL_SCOPE_FOR);
       // now create an out variable for the FOR statement
@@ -802,7 +802,7 @@ for_statement:
       // or may not refer to the FOR's variable
       AstNode* variableNameNode = variablesNode->getMemberUnchecked(0);
       TRI_ASSERT(variableNameNode->isStringValue());
-      AstNode* variableNode = parser->ast()->createNodeVariable(variableNameNode->getStringView(), true);
+      AstNode* variableNode = parser->ast()->createNodeVariable(variableNameNode->getStringView(), true);//现在创建了一个变量节点(同时也创建一个变量)
       parser->pushStack(variableNode);
     } for_options {
       // now we can handle the optional SEARCH condition and OPTIONS.
@@ -839,10 +839,10 @@ for_statement:
           parser->registerParseError(TRI_ERROR_QUERY_PARSE, "SEARCH condition used on non-view", yylloc.first_line, yylloc.first_column);
         }
       } else {
-        node = parser->ast()->createNodeFor(variable, $4, options);
+        node = parser->ast()->createNodeFor(variable, $4, options);//创建整个Node_type_for节点
       }
 
-      parser->ast()->addOperation(node);
+      parser->ast()->addOperation(node);//向整个ast的_root添加member
     }
   | T_FOR for_output_variables T_IN traversal_graph_info {
       // Traversal
@@ -1025,16 +1025,16 @@ collect_statement:
       auto node = parser->ast()->createNodeCollect(parser->ast()->createNodeArray(), $2, into, intoExpression, nullptr, $4);
       parser->ast()->addOperation(node);
     }
-  | collect_variable_list aggregate collect_optional_into options {
+  | collect_variable_list aggregate collect_optional_into options {//这个
       /* COLLECT var = expr AGGREGATE var = expr OPTIONS ... */
       VarSet variablesIntroduced{};
       auto scopes = parser->ast()->scopes();
 
-      if (::startCollectScope(scopes)) {
+      if (::startCollectScope(scopes)) {//开始一个新的CollectScope,要重新注册(实际上collect_variable_list和aggregate中已经注册在上一层的scopes了)
         ::registerAssignVariables(parser, scopes, yylloc.first_line, yylloc.first_column, variablesIntroduced, $1);
         ::registerAssignVariables(parser, scopes, yylloc.first_line, yylloc.first_column, variablesIntroduced, $2);
       }
-
+        //检查聚集函数的有效性(用的是聚集函数而不是普通函数)
       if (!::validateAggregates(parser, $2, yylloc.first_line, yylloc.first_column)) {
         YYABORT;
       }
@@ -1054,7 +1054,7 @@ collect_statement:
           groupVars.emplace(static_cast<Variable const*>(member->getMember(0)->getData()));
         }
       }
-
+      // 组变量不能在聚集涉及到的变量中出现
       // now validate if any aggregate refers to one of the group variables
       n = $2->numMembers();
       for (size_t i = 0; i < n; ++i) {
@@ -2165,7 +2165,7 @@ reference:
         node = ast->createNodeReference(variable);
       }
 
-      if (node == nullptr) {
+      if (node == nullptr) {//为collection时
         // variable not found. so it must have been a collection or view
         auto const& resolver = parser->query().resolver();
         node = ast->createNodeDataSource(resolver, variableName, arangodb::AccessMode::Type::READ, true, false);

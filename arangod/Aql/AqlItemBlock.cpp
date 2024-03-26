@@ -1112,6 +1112,7 @@ std::tuple<size_t, size_t> AqlItemBlock::getRelevantRange() const {
   // After a shadow row, we do NOT know how to continue with
   // The next Executor.
   // So we can hardcode to return 0 -> firstShadowRow || endOfBlock
+  // 返回0 -> firstShadowRow || endOfBlock
   if (hasShadowRows()) {
     TRI_ASSERT(!_shadowRows.empty());
     auto [shadowRowsBegin, shadowRowsEnd] = getShadowRowIndexesFrom(0);

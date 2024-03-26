@@ -148,7 +148,7 @@ void HashedCollectExecutor::destroyAllGroupsAqlValues() {
 
 void HashedCollectExecutor::consumeInputRow(InputAqlItemRow& input) {
   TRI_ASSERT(input.isInitialized());
-
+  // 找到对应hash表的迭代器
   decltype(_allGroups)::iterator currentGroupIt = findOrEmplaceGroup(input);
 
   if (!_infos.getAggregateTypes().empty()) {
@@ -164,7 +164,7 @@ void HashedCollectExecutor::consumeInputRow(InputAqlItemRow& input) {
       if (r.second.value() == RegisterId::maxRegisterId) {
         (*aggregateValues)[j].reduce(EmptyValue);
       } else {
-        (*aggregateValues)[j].reduce(input.getValue(r.second));
+        (*aggregateValues)[j].reduce(input.getValue(r.second));  // 进行聚集
       }
       ++j;
     }
@@ -175,7 +175,7 @@ void HashedCollectExecutor::writeCurrentGroupToOutput(
     OutputAqlItemRow& output) {
   // build the result
   size_t memoryUsage = memoryUsageForGroup(_currentGroup->first, false);
-  auto& keys = _currentGroup->first.values;
+  auto& keys = _currentGroup->first.values;  // 被group by的值
 
   TRI_ASSERT(keys.size() == _infos.getGroupRegisters().size());
   size_t i = 0;
@@ -198,6 +198,8 @@ void HashedCollectExecutor::writeCurrentGroupToOutput(
          ++aggregatorIdx) {
       AqlValue r = aggregators[aggregatorIdx].stealValue();
       AqlValueGuard guard{r, true};
+      // output.moveValueInto的sourceRow参数的作用是当写入的大小等于output的大小时
+      // 修改_lastSourceRow
       output.moveValueInto(_infos.getAggregatedRegisters()[j++].first,
                            _lastInitializedInputRow, &guard);
     }
@@ -410,8 +412,8 @@ HashedCollectExecutor::findOrEmplaceGroup(InputAqlItemRow& input) {
 }
 
 [[nodiscard]] auto HashedCollectExecutor::expectedNumberOfRows(
-    AqlItemBlockInputRange const& input, AqlCall const& call) const noexcept
-    -> size_t {
+    AqlItemBlockInputRange const& input,
+    AqlCall const& call) const noexcept -> size_t {
   if (!_isInitialized) {
     if (input.finalState() == MainQueryState::DONE) {
       // Worst case assumption:

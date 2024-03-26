@@ -61,6 +61,7 @@ bool AqlItemBlockInputRange::hasDataRow() const noexcept {
 
 // TODO: Implement peekDataRow (without state). e.g. IResearchViewExecutor does
 // not need the state!
+// 让inputRange提供一个用来读取数据的InputAqlItemRow(如果没数据则生成一个无效的)
 std::pair<ExecutorState, InputAqlItemRow> AqlItemBlockInputRange::peekDataRow()
     const {
   if (hasDataRow()) {
@@ -165,8 +166,8 @@ size_t AqlItemBlockInputRange::numRowsLeft() const noexcept {
 }
 
 template<int depthOffset>
-requires(depthOffset == 0 || depthOffset == -1) size_t
-    AqlItemBlockInputRange::skipAllShadowRowsOfDepth(size_t depth) {
+  requires(depthOffset == 0 || depthOffset == -1)
+size_t AqlItemBlockInputRange::skipAllShadowRowsOfDepth(size_t depth) {
   // Note that depthOffset == -1 iff we're at an SQS node.
   size_t skipped = 0;
   while (hasValidRow()) {

@@ -888,7 +888,7 @@ AqlValue Expression::executeSimpleExpressionFCallCxx(ExpressionContext& ctx,
     }
   };
 
-  size_t const n = member->numMembers();
+  size_t const n = member->numMembers();  // 函数的参数个数
 
   FunctionParameters params(n);
 

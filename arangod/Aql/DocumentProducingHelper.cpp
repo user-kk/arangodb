@@ -59,7 +59,7 @@ IndexIterator::DocumentCallback aql::getCallback(
     }
 
     context.incrScanned();
-
+    // checkFilter会检查过滤条件,不符合直接返回
     if (context.hasFilter() && !context.checkFilter(slice)) {
       context.incrFiltered();
       // required as we point lookup the document to check the filter condition
@@ -78,7 +78,7 @@ IndexIterator::DocumentCallback aql::getCallback(
     OutputAqlItemRow& output = context.getOutputRow();
     TRI_ASSERT(!output.isFull());
 
-    if (context.getProjectionsForRegisters().empty()) {
+    if (context.getProjectionsForRegisters().empty()) {  // 投影条件为空时
       // write all projections combined into the global output register
       // recycle our Builder object
       VPackBuilder& objectBuilder = context.getBuilder();
@@ -91,7 +91,7 @@ IndexIterator::DocumentCallback aql::getCallback(
       VPackSlice s = objectBuilder.slice();
       RegisterId registerId = context.getOutputRegister();
       output.moveValueInto(registerId, input, s);
-    } else {
+    } else {  // 投影条件不为空时
       // write projections into individual output registers
       context.getProjectionsForRegisters().produceFromDocument(
           context.getBuilder(), slice, context.getTrxPtr(),

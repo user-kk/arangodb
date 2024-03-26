@@ -130,8 +130,8 @@ class OutputAqlItemRow {
    *                    - Input and Output blocks are the same
    *                    - Input and Output row position are identical
    */
-  auto fastForwardAllRows(InputAqlItemRow const& sourceRow, size_t rows)
-      -> void;
+  auto fastForwardAllRows(InputAqlItemRow const& sourceRow,
+                          size_t rows) -> void;
 
   [[nodiscard]] RegisterCount getNumRegisters() const noexcept;
 
@@ -352,6 +352,7 @@ class OutputAqlItemRow {
    *        It is used for accounting of produced rows and number
    *        of rows requested by client.
    */
+  // 用于核算用户请求的生产行数
   AqlCall _call;
 
   RegIdSet const& _outputRegisters;
@@ -359,6 +360,6 @@ class OutputAqlItemRow {
   RegIdFlatSet const& _registersToClear;
 };
 
-auto operator<<(std::ostream& out, arangodb::aql::OutputAqlItemRow const&)
-    -> std::ostream&;
+auto operator<<(std::ostream& out,
+                arangodb::aql::OutputAqlItemRow const&) -> std::ostream&;
 }  // namespace arangodb::aql

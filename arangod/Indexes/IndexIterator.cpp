@@ -114,7 +114,9 @@ bool IndexIterator::nextDocumentImpl(DocumentCallback const& cb,
                                      uint64_t limit) {
   return nextImpl(
       [this, &cb](LocalDocumentId token) {
-        return _collection->getPhysical()
+        // 通过indexIter(基类,实际使用的是各种不同的indexIter),获得文档的id
+        return _collection
+            ->getPhysical()  // 再到集合中查找该文档(相当于回表)
             ->lookup(_trx, token, cb,
                      {.readOwnWrites = static_cast<bool>(_readOwnWrites),
                       .countBytes = true})

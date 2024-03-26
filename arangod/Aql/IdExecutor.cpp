@@ -79,6 +79,8 @@ IdExecutor<UsedFetcher>::IdExecutor(Fetcher& fetcher, IdExecutorInfos& infos)
 template<class UsedFetcher>
 IdExecutor<UsedFetcher>::~IdExecutor() = default;
 
+// 有数据则取出inputRange里面的数据转发给output,没数据就啥也不干
+// 返回inputRange内部状态机中的状态
 template<class UsedFetcher>
 auto IdExecutor<UsedFetcher>::produceRows(AqlItemBlockInputRange& inputRange,
                                           OutputAqlItemRow& output)
@@ -93,6 +95,7 @@ auto IdExecutor<UsedFetcher>::produceRows(AqlItemBlockInputRange& inputRange,
 
     size_t rows = inputRange.countAndSkipAllRemainingDataRows();
 
+    // 因为输入块和输出块在id算子上一定是同一个块,所以就是调了一下游标
     output.fastForwardAllRows(inputRow, rows);
 
     TRI_IF_FAILURE("SingletonBlock::getOrSkipSomeSet") {

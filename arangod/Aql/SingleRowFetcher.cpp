@@ -45,6 +45,7 @@ template<BlockPassthrough passBlocksThrough>
 SingleRowFetcher<passBlocksThrough>::SingleRowFetcher()
     : _dependencyProxy(nullptr) {}
 
+// 调用依赖的执行块的执行函数,执行后返回新的InputRange
 template<BlockPassthrough passBlocksThrough>
 std::tuple<ExecutionState, SkipResult, AqlItemBlockInputRange>
 SingleRowFetcher<passBlocksThrough>::execute(AqlCallStack const& stack) {
@@ -65,6 +66,7 @@ SingleRowFetcher<passBlocksThrough>::execute(AqlCallStack const& stack) {
         AqlItemBlockInputRange{MainQueryState::DONE, skipped.getSkipCount()}};
   }
 
+  // 获取数据得到新范围
   auto [start, end] = block->getRelevantRange();
   if (state == ExecutionState::HASMORE) {
     TRI_ASSERT(block != nullptr);

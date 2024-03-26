@@ -33,7 +33,7 @@ namespace arangodb::aql {
 // Partial map dep -> call. May be empty.
 // IMPORTANT: Are expected to be saved in increasing order (regarding
 // dependency)
-struct AqlCallSet {
+struct AqlCallSet {  // vector 依赖的index->call
   struct DepCallPair {
     std::size_t dependency{};
     AqlCallList call;
@@ -45,8 +45,8 @@ struct AqlCallSet {
   [[nodiscard]] auto size() const noexcept -> size_t;
 };
 
-auto operator<<(std::ostream& out, AqlCallSet::DepCallPair const& callPair)
-    -> std::ostream&;
+auto operator<<(std::ostream& out,
+                AqlCallSet::DepCallPair const& callPair) -> std::ostream&;
 auto operator<<(std::ostream&, AqlCallSet const&) -> std::ostream&;
 
 }  // namespace arangodb::aql

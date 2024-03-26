@@ -3081,7 +3081,7 @@ yyreduce:
   case 45: /* $@2: %empty  */
 #line 796 "grammar.y"
                                                {
-      AstNode* variablesNode = static_cast<AstNode*>((yyvsp[-2].node));
+      AstNode* variablesNode = static_cast<AstNode*>((yyvsp[-2].node));//这个是数组节点
       ::checkOutVariables(parser, variablesNode, 1, 1, "Collections and views FOR loops only allow a single return variable", yyloc);
       parser->ast()->scopes()->start(arangodb::aql::AQL_SCOPE_FOR);
       // now create an out variable for the FOR statement
@@ -3089,7 +3089,7 @@ yyreduce:
       // or may not refer to the FOR's variable
       AstNode* variableNameNode = variablesNode->getMemberUnchecked(0);
       TRI_ASSERT(variableNameNode->isStringValue());
-      AstNode* variableNode = parser->ast()->createNodeVariable(variableNameNode->getStringView(), true);
+      AstNode* variableNode = parser->ast()->createNodeVariable(variableNameNode->getStringView(), true);//现在创建了一个变量节点(同时也创建一个变量)
       parser->pushStack(variableNode);
     }
 #line 3095 "grammar.cpp"
@@ -3132,10 +3132,10 @@ yyreduce:
           parser->registerParseError(TRI_ERROR_QUERY_PARSE, "SEARCH condition used on non-view", yylloc.first_line, yylloc.first_column);
         }
       } else {
-        node = parser->ast()->createNodeFor(variable, (yyvsp[-2].node), options);
+        node = parser->ast()->createNodeFor(variable, (yyvsp[-2].node), options);//创建整个Node_type_for节点
       }
 
-      parser->ast()->addOperation(node);
+      parser->ast()->addOperation(node);//向整个ast的_root添加member
     }
 #line 3140 "grammar.cpp"
     break;
@@ -3389,16 +3389,16 @@ yyreduce:
 
   case 64: /* collect_statement: collect_variable_list aggregate collect_optional_into options  */
 #line 1028 "grammar.y"
-                                                                  {
+                                                                  {//这个
       /* COLLECT var = expr AGGREGATE var = expr OPTIONS ... */
       VarSet variablesIntroduced{};
       auto scopes = parser->ast()->scopes();
 
-      if (::startCollectScope(scopes)) {
+      if (::startCollectScope(scopes)) {//开始一个新的CollectScope,要重新注册(实际上collect_variable_list和aggregate中已经注册在上一层的scopes了)
         ::registerAssignVariables(parser, scopes, yylloc.first_line, yylloc.first_column, variablesIntroduced, (yyvsp[-3].node));
         ::registerAssignVariables(parser, scopes, yylloc.first_line, yylloc.first_column, variablesIntroduced, (yyvsp[-2].node));
       }
-
+        //检查聚集函数的有效性(用的是聚集函数而不是普通函数)
       if (!::validateAggregates(parser, (yyvsp[-2].node), yylloc.first_line, yylloc.first_column)) {
         YYABORT;
       }
@@ -3418,7 +3418,7 @@ yyreduce:
           groupVars.emplace(static_cast<Variable const*>(member->getMember(0)->getData()));
         }
       }
-
+      // 组变量不能在聚集涉及到的变量中出现
       // now validate if any aggregate refers to one of the group variables
       n = (yyvsp[-2].node)->numMembers();
       for (size_t i = 0; i < n; ++i) {
@@ -5249,7 +5249,7 @@ yyreduce:
         node = ast->createNodeReference(variable);
       }
 
-      if (node == nullptr) {
+      if (node == nullptr) {//为collection时
         // variable not found. so it must have been a collection or view
         auto const& resolver = parser->query().resolver();
         node = ast->createNodeDataSource(resolver, variableName, arangodb::AccessMode::Type::READ, true, false);

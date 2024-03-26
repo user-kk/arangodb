@@ -60,6 +60,17 @@ class SharedAqlItemBlockPtr;
 // to another AqlItemBlock, then the <AqlValue>s inside must be copied
 // (deep copy) to make the blocks independent.
 
+// <AqlItemBlock>是<AqlValue>s的<numRows>x<numRegisters>向量(不是指针)。
+// <AqlItemBlock>的大小是项的数量。
+// 给定列中的条目(即块中所有项的给定寄存器的所有值)具有相同的类型并属于相同的集合(如果它们的类型为shape)。
+// 通过<getDocumentCollection>访问特定列的文档集合，
+// 并且通过<getDocumentCollections>访问整个文档集合数组。
+// 不能访问整个项目，只能访问项目的特定寄存器(通过getValue)。
+
+// AqlItemBlock负责在销毁时显式地销毁它所包含的所有<AqlValue>。
+// 然而，允许其中的多个<AqlValue>s指向相同的结构，
+// 因此对于所有相同的副本只能销毁一次。
+// 此外，当AqlItemBlock的一部分被传递给另一个AqlItemBlock时，必须复制其中的<AqlValue>s(深度复制)以使块独立。
 class AqlItemBlock {
   friend class AqlItemBlockManager;
   // needed for testing only

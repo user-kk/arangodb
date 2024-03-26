@@ -45,6 +45,10 @@ namespace arangodb::aql {
  * case the executor cannot start with the next subquery run, but needs to
  * return and wait for more information given by the client.
  */
+// 只能singleExecutor使用
+// 当前的子查询使用第一个call,完成后算子请求下一个call
+// list of [specificCall, defaultCall, defaultCall,
+// defaultCall,defaultCall,...]
 class AqlCallList {
  public:
   friend bool operator==(AqlCallList const& left, AqlCallList const& right);
@@ -154,7 +158,7 @@ class AqlCallList {
 
 auto operator==(AqlCallList const& left, AqlCallList const& right) -> bool;
 
-auto operator<<(std::ostream& out, const arangodb::aql::AqlCallList& list)
-    -> std::ostream&;
+auto operator<<(std::ostream& out,
+                const arangodb::aql::AqlCallList& list) -> std::ostream&;
 
 }  // namespace arangodb::aql

@@ -247,13 +247,13 @@ void EnumerateCollectionExecutor::initializeNewRow(
 
   TRI_ASSERT(_currentRow.isInitialized());
 
-  _cursor->reset();
+  _cursor->reset();  // 调用游标的reset函数,不是置成空指针
   _cursorHasMore = _cursor->hasMore();
 }
 
 [[nodiscard]] auto EnumerateCollectionExecutor::expectedNumberOfRows(
-    AqlItemBlockInputRange const& input, AqlCall const& call) const noexcept
-    -> size_t {
+    AqlItemBlockInputRange const& input,
+    AqlCall const& call) const noexcept -> size_t {
   if (_infos.getCount()) {
     // when we are counting, we will always return a single row
     return std::max<size_t>(input.countShadowRows(), 1);
@@ -287,12 +287,13 @@ EnumerateCollectionExecutor::produceRows(AqlItemBlockInputRange& inputRange,
 
     if (!_cursorHasMore) {
       // the following call can change the value of _cursorHasMore
+      // 第一次进这个循环时,把inputRange取出inputRow设置成_currentRow
       initializeNewRow(inputRange);
     }
 
     if (_cursorHasMore) {
       TRI_ASSERT(_currentRow.isInitialized());
-      if (_infos.getCount()) {
+      if (_infos.getCount()) {  // 不需要实际内容,只需要数量时
         // count optimization
         TRI_ASSERT(!_documentProducingFunctionContext.hasFilter());
         uint64_t counter = 0;
@@ -310,7 +311,7 @@ EnumerateCollectionExecutor::produceRows(AqlItemBlockInputRange& inputRange,
         output.advanceRow();
 
         _cursorHasMore = _cursor->hasMore();
-      } else if (_infos.getProduceResult()) {
+      } else if (_infos.getProduceResult()) {  // 需要表内容时
         // properly build up results by fetching the actual documents
         // using nextDocument()
         TRI_ASSERT(_documentProducer != nullptr);

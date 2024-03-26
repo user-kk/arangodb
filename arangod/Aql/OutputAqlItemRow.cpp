@@ -351,7 +351,7 @@ SharedAqlItemBlockPtr OutputAqlItemRow::stealBlock() {
     block->shrink(numRows);
 
     if (!registersToClear().empty()) {
-      block->clearRegisters(registersToClear());
+      block->clearRegisters(registersToClear());  // 清空待清理的寄存器
     }
   }
 
@@ -625,8 +625,8 @@ OutputAqlItemRow::moveValueInto<InputAqlItemRow, AqlValueHintEmptyObject>(
     RegisterId registerId, InputAqlItemRow const& sourceRow,
     AqlValueHintEmptyObject);
 
-auto aql::operator<<(std::ostream& out, OutputAqlItemRow const& output)
-    -> std::ostream& {
+auto aql::operator<<(std::ostream& out,
+                     OutputAqlItemRow const& output) -> std::ostream& {
   return out << "{ OutputAqlItemRow " << static_cast<void const*>(&output)
              << ", blockNumRows: " << output.blockNumRows()
              << ", numRowsLeft: " << output.numRowsLeft()

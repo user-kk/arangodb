@@ -297,7 +297,7 @@ struct SingleServerQueryInstanciator final
       }
     }
 
-    if (block == nullptr) {
+    if (block == nullptr) {  // 调用对应node的创建块函数
       block = engine.addBlock(en->createBlock(engine));
       TRI_ASSERT(block != nullptr);
       // We have visited this node earlier, so we got its dependencies

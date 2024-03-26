@@ -112,20 +112,22 @@ class HashedCollectExecutorInfos {
   std::vector<std::string> _aggregateTypes;
 
   /// @brief pairs, consisting of out register and in register
+  // 聚集的输入reg,输出reg
   std::vector<std::pair<RegisterId, RegisterId>> _aggregateRegisters;
 
   /// @brief pairs, consisting of out register and in register
+  // group_by的输入reg,输出reg
   std::vector<std::pair<RegisterId, RegisterId>> _groupRegisters;
 
   /// @brief the optional register that contains the values for each group
   /// if no values should be returned, then this has a value of MaxRegisterId
   /// this register is also used for counting in case WITH COUNT INTO var is
   /// used
-  RegisterId _collectRegister;
+  RegisterId _collectRegister;  // collect的输出reg
 
   /// @brief the optional register that contains the input expression values for
   /// each group
-  RegisterId _expressionRegister;
+  RegisterId _expressionRegister;  // collect的输入reg
 
   std::vector<std::pair<std::string, RegisterId>> _inputVariables;
 
@@ -191,6 +193,8 @@ class HashedCollectExecutor {
       -> size_t;
 
  private:
+  // ValueAggregators的内存结构是
+  // ValueAggregators(_size 8byte)+n个Aggregator*+n个对应的派生Aggregator
   struct ValueAggregators {
     ValueAggregators(std::vector<Aggregator::Factory const*> factories,
                      velocypack::Options const* opts);

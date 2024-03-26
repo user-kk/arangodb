@@ -54,7 +54,11 @@ struct CreateInvalidShadowRowHint {
  * nodes are allowed transform a ShadowRow into an AqlOutputRow again, and add
  * the result of the subquery to it.
  */
-
+// 该行用于指示子查询的不同执行之间的分隔符。
+// 它将包含子查询输入的数据(以前用于initializeCursor)。
+// 不允许写入ShadowRow，
+// 只有SubqueryEnd节点被允许将ShadowRow再次转换为AqlOutputRow，
+// 并将子查询的结果添加到它。
 class ShadowAqlItemRow {
  public:
   constexpr explicit ShadowAqlItemRow(CreateInvalidShadowRowHint)
@@ -77,6 +81,7 @@ class ShadowAqlItemRow {
   ///        Also note: There is a guarantee that a non-relevant shadowrow, can
   ///        only be encountered right after a shadowrow. And only in descending
   ///        nesting level. (eg 1. inner most, 2. inner, 3. outer most)
+  /// 相关的ShadowRow表示我们现在所处的子查询上下文的子查询块的结束
   [[nodiscard]] bool isRelevant() const noexcept;
 
   /// @brief Test if this shadow row is initialized, eg has a block and has a

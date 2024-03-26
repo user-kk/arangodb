@@ -41,6 +41,8 @@ namespace arangodb::aql {
  *        This class should be independent from AQL internal
  *        knowledge for easy unit-testability.
  */
+// 寄存器信息 执行块构造时使用,
+//  提供给OutputAqlItemRow可以使用哪些寄存器,可以向哪些寄存器中输出,保留哪些寄存器,删除哪些寄存器
 class RegisterInfos {
  public:
   /**
@@ -52,8 +54,10 @@ class RegisterInfos {
    * @param nrOutputRegisters Width of output AqlItemBlocks
    * @param registersToClear Registers that are not used after this block, so
    *                         their values can be deleted
+   *                         以后用不到的寄存器,可以清空
    * @param registersToKeep Registers that will be used after this block, so
    *                        their values have to be copied
+   *                        以后会用到的寄存器
    *                        TODO Update this comment, it's a stack now.
    *
    * Note that the output registers can be found in the ExecutionNode via

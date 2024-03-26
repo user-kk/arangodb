@@ -221,8 +221,8 @@ void Query::destroy() {
 
   if (_queryOptions.profile >= ProfileLevel::TraceOne) {
     LOG_TOPIC("36a75", INFO, Logger::QUERIES)
-        << elapsedSince(_startTime) << " Query::~Query queryString: "
-        << " this: " << (uintptr_t)this;
+        << elapsedSince(_startTime)
+        << " Query::~Query queryString: " << " this: " << (uintptr_t)this;
   }
 
   // log to audit log
@@ -368,11 +368,12 @@ void Query::prepareQuery() {
         throw;
       }
     }
-
+    // 实例化算子
     enterState(QueryExecutionState::ValueType::PHYSICAL_INSTANTIATION);
 
     // simon: assumption is _queryString is empty for DBServer snippets
     bool const planRegisters = !_queryString.empty();
+    // 从查询计划创建查询引擎,即构造对应的算子
     ExecutionEngine::instantiateFromPlan(*this, *plan, planRegisters);
 
     _plans.push_back(std::move(plan));
@@ -417,7 +418,7 @@ std::unique_ptr<ExecutionPlan> Query::preparePlan() {
 
   TRI_ASSERT(_ast != nullptr);
   Parser parser(*this, *_ast, _queryString);
-  parser.parse();
+  parser.parse();  // 解析aql,得到语法树
 
   // put in bind parameters
   parser.ast()->injectBindParameters(_bindParameters, this->resolver());
@@ -463,7 +464,7 @@ std::unique_ptr<ExecutionPlan> Query::preparePlan() {
 
   enterState(QueryExecutionState::ValueType::LOADING_COLLECTIONS);
 
-  Result res = _trx->begin();
+  Result res = _trx->begin();  // 载入表
 
   if (!res.ok()) {
     THROW_ARANGO_EXCEPTION(res);
@@ -493,7 +494,8 @@ std::unique_ptr<ExecutionPlan> Query::preparePlan() {
   return plan;
 }
 
-/// @brief execute an AQL query
+/// @brief execute an AQL query 执行aql的入口点
+/// @param queryResult 结果的vpack对象
 ExecutionState Query::execute(QueryResult& queryResult) {
   LOG_TOPIC("e8ed7", DEBUG, Logger::QUERIES)
       << elapsedSince(_startTime) << " Query::execute"
@@ -532,8 +534,8 @@ ExecutionState Query::execute(QueryResult& queryResult) {
         }
 
         // will throw if it fails
-        if (!_ast) {  // simon: hack for AQL_EXECUTEJSON
-          prepareQuery();
+        if (!_ast) {       // simon: hack for AQL_EXECUTEJSON
+          prepareQuery();  // 解析aql,创建查询计划
         }
 
         logAtStart();
@@ -568,6 +570,7 @@ ExecutionState Query::execute(QueryResult& queryResult) {
         // In case of WAITING we return, this function is repeatable!
         // In case of HASMORE we loop
         while (true) {
+          // 执行引擎调用next
           auto const& [state, skipped, block] = engine->execute(::defaultStack);
           // The default call asks for No skips.
           TRI_ASSERT(skipped.nothingSkipped());

@@ -501,16 +501,16 @@ bool IndexExecutor::CursorReader::readIndex(
     case IndexNode::Strategy::kNoResult:
       TRI_ASSERT(_documentNonProducer != nullptr);
       return _cursor->next(_documentNonProducer, output.numRowsLeft());
-    case IndexNode::Strategy::kCovering:
+    case IndexNode::Strategy::kCovering:  // 索引完全覆盖时
     case IndexNode::Strategy::kCoveringFilterScanOnly:
     case IndexNode::Strategy::kCoveringFilterOnly:
     case IndexNode::Strategy::kLateMaterialized:
       TRI_ASSERT(_coveringProducer != nullptr);
       return _cursor->nextCovering(_coveringProducer, output.numRowsLeft());
-    case IndexNode::Strategy::kDocument:
+    case IndexNode::Strategy::kDocument:  // 索引没有覆盖时
       TRI_ASSERT(_documentProducer != nullptr);
       return _cursor->nextDocument(_documentProducer, output.numRowsLeft());
-    case IndexNode::Strategy::kCount: {
+    case IndexNode::Strategy::kCount: {  // 只要求统计数量时
       uint64_t counter = 0;
       if (_checkUniqueness) {
         _cursor->all([&](LocalDocumentId token) -> bool {
@@ -582,7 +582,7 @@ bool IndexExecutor::CursorReader::isCovering() const {
          _strategy == IndexNode::Strategy::kCoveringFilterScanOnly ||
          _strategy == IndexNode::Strategy::kCoveringFilterOnly;
 }
-
+// 根据条件搜索index,返回indexIter
 void IndexExecutor::CursorReader::reset() {
   TRI_ASSERT(_cursor != nullptr);
 
@@ -743,7 +743,7 @@ void IndexExecutor::executeExpressions(InputAqlItemRow const& input) {
     }
   }
 }
-
+// 令游标加一,如果超过范围,惰性创建游标
 bool IndexExecutor::advanceCursor() {
   // This function will lazily create cursors.
   // It will also settle the asc / desc ordering
@@ -774,7 +774,7 @@ bool IndexExecutor::advanceCursor() {
           conditionNode = _infos.getCondition()->getMember(infoIndex);
         }
       }
-      _cursors.emplace_back(_trx, _infos, conditionNode,
+      _cursors.emplace_back(_trx, _infos, conditionNode,  // 根据条件创建索引
                             _infos.getIndexes()[infoIndex],
                             _documentProducingFunctionContext, _cursorStats,
                             needsUniquenessCheck());
@@ -817,8 +817,8 @@ bool IndexExecutor::needsUniquenessCheck() const noexcept {
 }
 
 [[nodiscard]] auto IndexExecutor::expectedNumberOfRows(
-    AqlItemBlockInputRange const& input, AqlCall const& call) const noexcept
-    -> size_t {
+    AqlItemBlockInputRange const& input,
+    AqlCall const& call) const noexcept -> size_t {
   if (_infos.strategy() == IndexNode::Strategy::kCount) {
     // when we are counting, we will always return a single row
     return std::max<size_t>(input.countShadowRows(), 1);

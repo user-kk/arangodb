@@ -153,6 +153,7 @@ void RestCursorHandler::cancel() {
 ///
 /// return If true, we need to continue processing,
 ///        If false we are done (error or stream)
+/// 创建查询对象,并将其注册为RestCursorHandler的成员,并且调用执行
 futures::Future<RestStatus> RestCursorHandler::registerQueryOrCursor(
     velocypack::Slice slice, transaction::OperationOrigin operationOrigin) {
   TRI_ASSERT(_query == nullptr);
@@ -199,7 +200,7 @@ futures::Future<RestStatus> RestCursorHandler::registerQueryOrCursor(
 
   // simon: access mode can always be write on the coordinator
   AccessMode::Type mode = AccessMode::Type::WRITE;
-
+  // 创建查询对象
   auto query = aql::Query::create(
       co_await createTransactionContext(mode, operationOrigin),
       aql::QueryString(querySlice.stringView()), std::move(bindVarsBuilder),
@@ -257,6 +258,7 @@ RestStatus RestCursorHandler::processQuery() {
     auto guard = scopeGuard([this]() noexcept { unregisterQuery(); });
 
     // continue handler is registered earlier
+    // 调用查询
     auto state = _query->execute(_queryResult);
 
     if (state == aql::ExecutionState::WAITING) {
@@ -271,6 +273,7 @@ RestStatus RestCursorHandler::processQuery() {
 }
 
 // non stream case, result is complete
+// 处理查询结果
 RestStatus RestCursorHandler::handleQueryResult() {
   TRI_ASSERT(_query == nullptr);
   if (_queryResult.result.fail()) {

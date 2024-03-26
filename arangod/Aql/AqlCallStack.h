@@ -48,6 +48,9 @@ namespace aql {
  *        Using this stack, we can transport all necessary calls from the outer
  *        subqueries to the Executors that need to produce data for them.
  */
+// 为外面的子查询传输信息,每个查询的开始,
+// stack会有一个calllist的实体,定义了最外层查询应当做什么
+// 为外部的查询传输必要的call信息给生产数据的算子
 class AqlCallStack {
  public:
   struct Empty {};

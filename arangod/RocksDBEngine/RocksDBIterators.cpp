@@ -134,10 +134,12 @@ class RocksDBAllIndexIterator final : public IndexIterator {
 
     TRI_ASSERT(limit > 0);
 
-    do {
+    do {  // 一个循环一个文档元素
       // count number of bytes read here
       _bytesRead += _iterator->value().size();
       // TODO(MBkkt) optimize it, extract value from rocksdb
+      // cb 函数是进行投影和过滤并放置到输出块中
+      // 注意这个强转,直接把数据变成vpack了(数据由_iterator读到的变成vpack)
       cb(RocksDBKey::documentId(_iterator->key()), nullptr,
          VPackSlice(
              reinterpret_cast<uint8_t const*>(_iterator->value().data())));

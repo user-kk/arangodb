@@ -11,6 +11,6 @@ elif [ "$1" = "config" ]; then
     cmake --preset=mybuild
 elif [ "$1" = "server" ]; then
     ./build-presets/mybuild/bin/arangod -c ./etc/relative/arangod.conf ./tmp/database-dir
-else
+else 
     ./build-presets/mybuild/bin/arangosh -c ./etc/relative/arangosh.conf --server.database test
 fi

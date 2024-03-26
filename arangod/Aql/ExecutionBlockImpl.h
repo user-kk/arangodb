@@ -84,7 +84,8 @@ static constexpr bool isMultiDepExecutor =
  *        For performance reasons this will all be done in batches
  *        of 1000 Rows each.
  *
- * @tparam Executor A class that needs to have the following signature:
+ * @tparam 算子,定义了取操作,统计信息
+ *         Executor A class that needs to have the following signature:
  *         Executor {
  *           using Fetcher = xxxFetcher;
  *           using Infos = xxxExecutorInfos;
@@ -146,29 +147,30 @@ class ExecutionBlockImpl final : public ExecutionBlock {
   // Defines the internal state this executor is in.
   enum class ExecState {
     // We need to check the client call to define the next state (inital state)
-    CHECKCALL,
+    CHECKCALL,  // 初始化状态
     // We are skipping rows in offset
-    SKIP,
+    SKIP,  // 越过一些行
     // We are producing rows
-    PRODUCE,
+    PRODUCE,  // 生产一些行
     // We are done producing (limit reached) and drop all rows that are
     // unneeded, might count.
-    FASTFORWARD,
+    FASTFORWARD,  // 生产完了
     // We need more information from dependency
-    UPSTREAM,
+    UPSTREAM,  // 需要依赖传来的数据
     // We are done with a subquery, we need to pass forward ShadowRows
-    SHADOWROWS,
+    SHADOWROWS,  // 完成子查询,需要转发ShadowRows
     // We have passed the shadowRows and check if we can continue with the next
     // subquery
-    NEXTSUBQUERY,
+    NEXTSUBQUERY,  // 转发了ShadowRows,检查是否继续下一个子查询
     // Locally done, ready to return, will set state to resetted
-    DONE
+    DONE  // 完成了,可以return了
   };
 
   // Where Executors with a single dependency return an AqlCall, Executors with
   // multiple dependencies return a partial map depIndex -> AqlCall.
   // It may be empty. If the cardinality is greater than one, the calls will be
   // executed in parallel.
+  // 如果基数大于一(即多依赖算子),会并行执行
   using AqlCallType =
       std::conditional_t<isMultiDepExecutor<Executor>, AqlCallSet, AqlCall>;
 
@@ -192,13 +194,14 @@ class ExecutionBlockImpl final : public ExecutionBlock {
   ///        the first execute() call.
   ///        Is currently called conditionally in execute() itself, but should
   ///        better be called in instantiateFromPlan and similar methods.
-  void init();
+  void init();  // 查询计划被创建后,第一次查询被执行之前调用
 
   [[nodiscard]] std::pair<ExecutionState, Result> initializeCursor(
       InputAqlItemRow const& input) override;
 
-  auto injectConstantBlock(SharedAqlItemBlockPtr block, SkipResult skipped)
-      -> void requires std::same_as<Executor, IdExecutor<ConstFetcher>>;
+  auto injectConstantBlock(SharedAqlItemBlockPtr block,
+                           SkipResult skipped) -> void
+    requires std::same_as<Executor, IdExecutor<ConstFetcher>>;
 
   [[nodiscard]] ExecutorInfos const& executorInfos() const;
 
@@ -211,10 +214,11 @@ class ExecutionBlockImpl final : public ExecutionBlock {
   ///        so this block can modify it. Will return
   ///        1. state:
   ///          * WAITING: We have async operation going on, nothing happend,
-  ///          please call again
+  ///          * please call again 有异步操作在执行,无事发生,请再次调用
   ///          * HASMORE: Here is some data in the request range, there is still
-  ///          more, if required call again
+  ///          * more, if required call again 有数据了,还有更多,需要的话再调用
   ///          * DONE: Here is some data, and there will be no further data
+  ///          * 有数据了,没有更多了
   ///          available.
   ///        2. SkipResult: Amount of documents skipped.
   ///        3. SharedAqlItemBlockPtr: The next data block.
@@ -223,9 +227,9 @@ class ExecutionBlockImpl final : public ExecutionBlock {
 
   void collectExecStats(ExecutionStats& stats) override;
 
-  [[nodiscard]] auto getOutputRegisterId() const noexcept
-      -> RegisterId requires std::same_as<
-          Executor, IdExecutor<SingleRowFetcher<BlockPassthrough::Enable>>>;
+  [[nodiscard]] auto getOutputRegisterId() const noexcept -> RegisterId
+    requires std::same_as<
+        Executor, IdExecutor<SingleRowFetcher<BlockPassthrough::Enable>>>;
 
 #ifdef ARANGODB_USE_GOOGLE_TESTS
   // This is a helper method to inject a prepared
@@ -295,9 +299,11 @@ class ExecutionBlockImpl final : public ExecutionBlock {
   // In most executors they are simply copied, in subquery executors
   // there needs to be actions applied here.
   [[nodiscard]] auto shadowRowForwardingSubqueryStart(AqlCallStack& stack)
-      -> ExecState requires std::same_as<Executor, SubqueryStartExecutor>;
+      -> ExecState
+    requires std::same_as<Executor, SubqueryStartExecutor>;
   [[nodiscard]] auto shadowRowForwardingSubqueryEnd(AqlCallStack& stack)
-      -> ExecState requires std::same_as<Executor, SubqueryEndExecutor>;
+      -> ExecState
+    requires std::same_as<Executor, SubqueryEndExecutor>;
 
   [[nodiscard]] auto shadowRowForwarding(AqlCallStack& stack) -> ExecState;
 
@@ -315,21 +321,19 @@ class ExecutionBlockImpl final : public ExecutionBlock {
   // as soon as we reach a place where there is no skip
   // ordered in the outer shadow rows, this call
   // will fall back to shadowRowForwarding.
-  [[nodiscard]] auto sideEffectShadowRowForwarding(AqlCallStack& stack,
-                                                   SkipResult& skipResult)
-      -> ExecState;
+  [[nodiscard]] auto sideEffectShadowRowForwarding(
+      AqlCallStack& stack, SkipResult& skipResult) -> ExecState;
 
   void initOnce();
 
   [[nodiscard]] auto executorNeedsCall(AqlCallType& call) const noexcept
       -> bool;
 
-  auto memoizeCall(AqlCall const& call, bool wasCalledWithContinueCall) noexcept
-      -> void;
+  auto memoizeCall(AqlCall const& call,
+                   bool wasCalledWithContinueCall) noexcept -> void;
 
-  [[nodiscard]] auto createUpstreamCall(AqlCall const& call,
-                                        bool wasCalledWithContinueCall)
-      -> AqlCallList;
+  [[nodiscard]] auto createUpstreamCall(
+      AqlCall const& call, bool wasCalledWithContinueCall) -> AqlCallList;
 
   auto countShadowRowProduced(AqlCallStack& stack, size_t depth) -> void;
 
@@ -360,6 +364,9 @@ class ExecutionBlockImpl final : public ExecutionBlock {
    * This is necessary to avoid waiting for a task that has already been
    * consumed.
    */
+  // 被创建后会生成一个异步的预取任务,会进入调度器给与工作线程
+  //  如果工作线程claim成功,就会占有这个任务并执行,执行完后会调用bell发信号
+  // 使用的时候也要claim,使用完后设置成Consumed
   struct PrefetchTask {
     enum class Status { Pending, InProgress, Finished, Consumed };
     using PrefetchResult =
@@ -419,6 +426,8 @@ class ExecutionBlockImpl final : public ExecutionBlock {
    * avoid stack overflows.
    *
    */
+  // 防止栈溢出用的,开另一个线程调用上游节点,调用Callsplit::execute储存参数并堵塞
+  // 另一个线程得到参数并执行
   struct CallstackSplit {
     explicit CallstackSplit(ExecutionBlockImpl& block);
     ~CallstackSplit();
@@ -457,13 +466,15 @@ class ExecutionBlockImpl final : public ExecutionBlock {
 
     std::thread _thread;
   };
-
+  // 存放着in,out等寄存器的id,根据id可直接向块里写到对应位置
+  // 还存储着需要keep和clear的寄存器id
   RegisterInfos _registerInfos;
 
   /**
    * @brief Used to allow the row Fetcher to access selected methods of this
    *        ExecutionBlock object.
    */
+  // 用于让fetcher访问ExecutionBlock的方法函数
   DependencyProxy _dependencyProxy;
 
   /**
@@ -476,15 +487,16 @@ class ExecutionBlockImpl final : public ExecutionBlock {
    *        the template class needs to implement the logic
    *        to produce a single row from the upstream information.
    */
+  // 算子运算所需的背景信息
   ExecutorInfos _executorInfos;
-
+  // 算子
   std::optional<Executor> _executor;
-
+  // 输出元素的行(里面保存着AQLItemBlock的指针,可通过这个写入)
   std::unique_ptr<OutputAqlItemRow> _outputItemRow;
 
   QueryContext const& _query;
 
-  InternalState _state;
+  InternalState _state;  // 被弃用
 
   ExecState _execState;
 
@@ -492,11 +504,11 @@ class ExecutionBlockImpl final : public ExecutionBlock {
 
   DataRange _lastRange;
 
-  AqlCallType _upstreamRequest;
+  AqlCallType _upstreamRequest;  // 上游的call信息
 
   std::optional<AqlCallType> _defaultUpstreamRequest{std::nullopt};
 
-  AqlCall _clientRequest;
+  AqlCall _clientRequest;  // 客户的call信息
 
   /// used to track the stats per executor
   typename Executor::Stats _blockStats;
@@ -515,6 +527,7 @@ class ExecutionBlockImpl final : public ExecutionBlock {
   // We track if we have reference the range's block
   // into an output block.
   // If so we are not allowed to reuse it.
+  // 是否引用了输出块中的范围,如果引用了.就不能重用
   bool _hasUsedDataRangeBlock;
 
   bool _executorReturnedDone = false;

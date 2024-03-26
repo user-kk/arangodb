@@ -52,6 +52,7 @@
 
 #include <absl/strings/str_cat.h>
 
+#include <thread>
 #include <type_traits>
 
 namespace arangodb {
@@ -263,7 +264,7 @@ class TestLambdaSkipExecutor;
  *  This is if exection of this Executor does have side-effects
  *  other then it's own result.
  */
-
+// 是否副作用:指的是是否能够绕过子查询
 template<typename Executor>
 constexpr bool executorHasSideEffects = is_one_of_v<
     Executor,
@@ -336,7 +337,7 @@ std::unique_ptr<OutputAqlItemRow> ExecutionBlockImpl<Executor>::createOutputRow(
     // Check that all output registers are empty.
     size_t const n = newBlock->numRows();
     auto const& regs = _registerInfos.getOutputRegisters();
-    if (!regs.empty()) {
+    if (!regs.empty()) {  // 检查输出寄存器是否为空,是否是常规寄存器
       bool const hasShadowRows = newBlock->hasShadowRows();
       for (size_t row = 0; row < n; row++) {
         if (!hasShadowRows || !newBlock->isShadowRow(row)) {
@@ -562,18 +563,19 @@ auto ExecutionBlockImpl<Executor>::allocateOutputBlock(AqlCall&& call)
     -> std::unique_ptr<OutputAqlItemRow> {
   if constexpr (Executor::Properties::allowsBlockPassthrough ==
                 BlockPassthrough::Enable) {
+    // 允许直通时,没引用输出块,就直接把lastRange的块拿来当输出块
     // Passthrough variant, re-use the block stored in InputRange
     if (!_hasUsedDataRangeBlock) {
       // In the pass through variant we have the contract that we work on a
       // block all or nothing, so if we have used the block once, we cannot use
       // it again however we cannot remove the _lastRange as it may contain
       // additional information.
-      _hasUsedDataRangeBlock = true;
+      _hasUsedDataRangeBlock = true;  // 现在lastRange我要用来生产
       return createOutputRow(_lastRange.getBlock(), std::move(call));
     }
-
+    // 引用了就创建一个空指针块
     return createOutputRow(SharedAqlItemBlockPtr{nullptr}, std::move(call));
-  } else {
+  } else {  // 不允许直通则计算申请块的大小,创建新块
     if constexpr (isMultiDepExecutor<Executor>) {
       // MultiDepExecutor would require dependency handling.
       // We do not have it here.
@@ -838,14 +840,15 @@ struct dependent_false : std::false_type {};
  * FULLCOUNT => Call executeSkipRowsRange and report what has been skipped.
  * EXECUTOR => Call executeSkipRowsRange, but do not report what has been
  * skipped. (This instance is used to make sure Modifications are performed, or
- * stats are correct) FETCHER => Do not bother the Executor, drop all from
+ * stats are correct)
+ * FETCHER => Do not bother the Executor, drop all from
  * input, without further reporting
  */
 enum class FastForwardVariant { FULLCOUNT, EXECUTOR, FETCHER };
 
 template<class Executor>
-static auto fastForwardType(AqlCall const& call, Executor const&)
-    -> FastForwardVariant {
+static auto fastForwardType(AqlCall const& call,
+                            Executor const&) -> FastForwardVariant {
   if (call.needsFullCount() && call.getOffset() == 0 && call.getLimit() == 0) {
     // Only start fullCount after the original call is fulfilled. Otherwise
     // do fast-forward variant
@@ -1034,9 +1037,9 @@ auto ExecutionBlockImpl<Executor>::executeProduceRows(
 
 template<class Executor>
 auto ExecutionBlockImpl<Executor>::executeSkipRowsRange(
-    typename Fetcher::DataRange& inputRange, AqlCall& call)
-    -> std::tuple<ExecutorState, typename Executor::Stats, size_t,
-                  AqlCallType> {
+    typename Fetcher::DataRange& inputRange,
+    AqlCall& call) -> std::tuple<ExecutorState, typename Executor::Stats,
+                                 size_t, AqlCallType> {
   // The skippedRows is a temporary counter used in this function
   // We need to make sure to reset it afterwards.
   auto sg = arangodb::scopeGuard([&]() noexcept { call.resetSkipCount(); });
@@ -1169,8 +1172,9 @@ auto ExecutionBlockImpl<Executor>::sideEffectShadowRowForwarding(
 
 template<typename Executor>
 auto ExecutionBlockImpl<Executor>::shadowRowForwardingSubqueryStart(
-    AqlCallStack& stack)
-    -> ExecState requires std::same_as<Executor, SubqueryStartExecutor> {
+    AqlCallStack& stack) -> ExecState
+  requires std::same_as<Executor, SubqueryStartExecutor>
+{
   TRI_ASSERT(_outputItemRow);
   TRI_ASSERT(_outputItemRow->isInitialized());
   TRI_ASSERT(!_outputItemRow->allRowsUsed());
@@ -1245,8 +1249,9 @@ auto ExecutionBlockImpl<Executor>::shadowRowForwardingSubqueryStart(
 
 template<typename Executor>
 auto ExecutionBlockImpl<Executor>::shadowRowForwardingSubqueryEnd(
-    AqlCallStack& stack)
-    -> ExecState requires std::same_as<Executor, SubqueryEndExecutor> {
+    AqlCallStack& stack) -> ExecState
+  requires std::same_as<Executor, SubqueryEndExecutor>
+{
   TRI_ASSERT(_outputItemRow);
   TRI_ASSERT(_outputItemRow->isInitialized());
   TRI_ASSERT(!_outputItemRow->allRowsUsed());
@@ -1393,9 +1398,9 @@ auto ExecutionBlockImpl<Executor>::shadowRowForwarding(AqlCallStack& stack)
 
 template<class Executor>
 auto ExecutionBlockImpl<Executor>::executeFastForward(
-    typename Fetcher::DataRange& inputRange, AqlCall& clientCall)
-    -> std::tuple<ExecutorState, typename Executor::Stats, size_t,
-                  AqlCallType> {
+    typename Fetcher::DataRange& inputRange,
+    AqlCall& clientCall) -> std::tuple<ExecutorState, typename Executor::Stats,
+                                       size_t, AqlCallType> {
   auto type = fastForwardType(clientCall, executor());
   switch (type) {
     case FastForwardVariant::FULLCOUNT: {
@@ -1430,7 +1435,7 @@ auto ExecutionBlockImpl<Executor>::executeFastForward(
 
       return {state, stats, 0, call};
     }
-    case FastForwardVariant::FETCHER: {
+    case FastForwardVariant::FETCHER: {  // 调用inputRange.upstreamState(),返回
       LOG_QUERY("fa327", DEBUG) << printTypeInfo() << " bypass unused rows.";
       ADB_IGNORE_UNUSED auto const dependency =
           inputRange.skipAllRemainingDataRows();
@@ -1519,10 +1524,13 @@ ExecutionBlockImpl<Executor>::executeWithoutTrace(
     AqlCallStack const& callStack) {
   // We can only work on a Stack that has valid calls for all levels.
   TRI_ASSERT(callStack.hasAllValidCalls());
+
+  // 用传过来的callStack创建执行背景
   ExecutionContext ctx(*this, callStack);
 
   ExecutorState localExecutorState = ExecutorState::DONE;
 
+  // 检验当前执行状态
   if constexpr (executorCanReturnWaiting<Executor>) {
     TRI_ASSERT(
         _execState == ExecState::CHECKCALL ||
@@ -1541,6 +1549,8 @@ ExecutionBlockImpl<Executor>::executeWithoutTrace(
                (std::is_same_v<Executor, IdExecutor<ConstFetcher>>));
   }
 
+  // 当前算子不允许直通,且没有副作用时,如果执行块此时处于初始化状态或刚完成子查询的状态
+  // 那么我们要在子查询中检查外部查询是否被跳过了
   if constexpr (Executor::Properties::allowsBlockPassthrough ==
                     BlockPassthrough::Disable &&
                 !executorHasSideEffects<Executor>) {
@@ -1571,7 +1581,7 @@ ExecutionBlockImpl<Executor>::executeWithoutTrace(
         // ExecutionContext is constructed at the beginning of
         // executeWithoutTrace, so input and call-stack already align at this
         // point.
-        constexpr static int depthOffset = ([]() consteval->int {
+        constexpr static int depthOffset = ([]() consteval -> int {
           if constexpr (std::is_same_v<Executor, SubqueryStartExecutor>) {
             return -1;
           } else {
@@ -1614,6 +1624,8 @@ ExecutionBlockImpl<Executor>::executeWithoutTrace(
   // is disallowed to change her mind anyways so we simply continue to work on
   // the call we already have The guarantee is, if we have returned the block,
   // and modified our local call, then the outputItemRow is not initialized
+  // 如果返回了块,并修改了call,那么_outputItemRow没有被初始化
+  // 如果被初始化了,那么要把上下文中的clientCall修改成_outputItemRow的客户call
   if constexpr (!std::is_same_v<Executor, SubqueryEndExecutor>) {
     // The subqueryEndExecutor has handled it above
     if (_outputItemRow != nullptr && _outputItemRow->isInitialized()) {
@@ -1680,15 +1692,18 @@ ExecutionBlockImpl<Executor>::executeWithoutTrace(
   }
 
   auto returnToState = ExecState::CHECKCALL;
+
   LOG_QUERY("007ac", DEBUG)
-      << "starting statemachine of executor " << printBlockInfo();
+      << "thread_id: " << std::this_thread::get_id()
+      << " starting statemachine of executor " << printBlockInfo();
   while (_execState != ExecState::DONE) {
     // We can never keep state in the skipCounter
     TRI_ASSERT(ctx.clientCall.getSkipCount() == 0);
     switch (_execState) {
       case ExecState::CHECKCALL: {
         LOG_QUERY("cfe46", DEBUG)
-            << printTypeInfo() << " determine next action on call "
+            << "thread_id: " << std::this_thread::get_id() << " "
+            << printTypeInfo() << " checkall determine next action on call "
             << ctx.clientCall;
 
         if constexpr (executorHasSideEffects<Executor>) {
@@ -1712,6 +1727,7 @@ ExecutionBlockImpl<Executor>::executeWithoutTrace(
             ctx.clientCall.getLimit() == 0 && ctx.clientCall.needsFullCount();
 #endif
         LOG_QUERY("1f786", DEBUG)
+            << "thread_id: " << std::this_thread::get_id() << " "
             << printTypeInfo() << " call skipRows " << ctx.clientCall;
 
         ExecutorState state = ExecutorState::HASMORE;
@@ -1787,6 +1803,7 @@ ExecutionBlockImpl<Executor>::executeWithoutTrace(
         TRI_ASSERT(ctx.clientCall.getSkipCount() == 0);
 
         LOG_QUERY("1f787", DEBUG)
+            << "thread_id: " << std::this_thread::get_id() << " "
             << printTypeInfo() << " call produceRows " << ctx.clientCall;
         if (outputIsFull()) {
           // We need to be able to write data
@@ -1851,7 +1868,9 @@ ExecutionBlockImpl<Executor>::executeWithoutTrace(
           // In all other branches only if the client Still needs more data.
           _execState = ExecState::DONE;
           break;
-        } else if (ctx.clientCall.getLimit() > 0 && executorNeedsCall(call)) {
+        } else if (ctx.clientCall.getLimit() > 0 &&
+                   executorNeedsCall(
+                       call)) {  // 有空间且lastRange没数据,就转成UPSTREAM状态
           TRI_ASSERT(_upstreamState != ExecutionState::DONE);
           // We need to request more
           _upstreamRequest = call;
@@ -1864,6 +1883,7 @@ ExecutionBlockImpl<Executor>::executeWithoutTrace(
       }
       case ExecState::FASTFORWARD: {
         LOG_QUERY("96e2c", DEBUG)
+            << "thread_id: " << std::this_thread::get_id() << " "
             << printTypeInfo()
             << " all produced, fast forward to end up (sub-)query.";
 
@@ -1943,6 +1963,7 @@ ExecutionBlockImpl<Executor>::executeWithoutTrace(
       }
       case ExecState::UPSTREAM: {
         LOG_QUERY("488de", DEBUG)
+            << "thread_id: " << std::this_thread::get_id() << " "
             << printTypeInfo() << " request dependency " << _upstreamRequest;
         // If this triggers the executors produceRows function has returned
         // HASMORE even if it knew that upstream has no further rows.
@@ -1959,9 +1980,11 @@ ExecutionBlockImpl<Executor>::executeWithoutTrace(
         if (_callstackSplit) {
           // we need to split the callstack to avoid stack overflows, so we move
           // upstream execution into a separate thread
+          // 把上个算子的output的range赋给本算子的_lastRange
           std::tie(_upstreamState, skippedLocal, _lastRange) =
               _callstackSplit->execute(ctx, _upstreamRequest);
         } else {
+          // 执行下一个算子,把下一个算子的output的range赋给本算子的_lastRange
           std::tie(_upstreamState, skippedLocal, _lastRange) =
               executeFetcher(ctx, _upstreamRequest);
         }
@@ -2018,6 +2041,7 @@ ExecutionBlockImpl<Executor>::executeWithoutTrace(
         if constexpr (Executor::Properties::allowsBlockPassthrough ==
                       BlockPassthrough::Enable) {
           // We have a new range, passthrough can use this range.
+          // lastRange变成新的了,现在可以申请使用
           _hasUsedDataRangeBlock = false;
         }
 
@@ -2087,6 +2111,7 @@ ExecutionBlockImpl<Executor>::executeWithoutTrace(
         // We only get called with something in the input.
         TRI_ASSERT(_lastRange.hasValidRow());
         LOG_QUERY("7c63c", DEBUG)
+            << "thread_id: " << std::this_thread::get_id() << " "
             << printTypeInfo() << " (sub-)query completed. Move ShadowRows.";
 
         // TODO: Check if we can have the situation that we are between two
@@ -2133,6 +2158,7 @@ ExecutionBlockImpl<Executor>::executeWithoutTrace(
         // For this executor the input of the next run will be injected and it
         // can continue to work.
         LOG_QUERY("0ca35", DEBUG)
+            << "thread_id: " << std::this_thread::get_id() << " "
             << printTypeInfo()
             << " ShadowRows moved, continue with next subquery.";
 
@@ -2174,7 +2200,8 @@ ExecutionBlockImpl<Executor>::executeWithoutTrace(
     TRI_ASSERT(ctx.clientCall.getSkipCount() == 0);
   }
   LOG_QUERY("80c24", DEBUG)
-      << printBlockInfo() << " local statemachine done. Return now.";
+      << "thread_id: " << std::this_thread::get_id() << " " << printBlockInfo()
+      << " local statemachine done. Return now.";
   // If we do not have an output, we simply return a nullptr here.
 
   if constexpr (Executor::Properties::allowsBlockPassthrough ==
@@ -2189,6 +2216,7 @@ ExecutionBlockImpl<Executor>::executeWithoutTrace(
                               _outputItemRow->numRowsWritten()));
   }
 
+  // steal()能够清空待清理的寄存器
   auto outputBlock = _outputItemRow != nullptr ? _outputItemRow->stealBlock()
                                                : SharedAqlItemBlockPtr{nullptr};
   // We are locally done with our output.
@@ -2343,9 +2371,8 @@ auto ExecutionBlockImpl<Executor>::createUpstreamCall(
 }
 
 template<class Executor>
-auto ExecutionBlockImpl<Executor>::countShadowRowProduced(AqlCallStack& stack,
-                                                          size_t depth)
-    -> void {
+auto ExecutionBlockImpl<Executor>::countShadowRowProduced(
+    AqlCallStack& stack, size_t depth) -> void {
   auto& subList = stack.modifyCallListAtDepth(depth);
   auto& subCall = subList.modifyNextCall();
   subCall.didProduce(1);
@@ -2361,9 +2388,8 @@ auto ExecutionBlockImpl<Executor>::countShadowRowProduced(AqlCallStack& stack,
 // input range in the tests. It should simulate
 // an ongoing query in a specific state.
 template<class Executor>
-auto ExecutionBlockImpl<Executor>::testInjectInputRange(DataRange range,
-                                                        SkipResult skipped)
-    -> void {
+auto ExecutionBlockImpl<Executor>::testInjectInputRange(
+    DataRange range, SkipResult skipped) -> void {
   if (range.finalState() == MainQueryState::DONE) {
     _upstreamState = ExecutionState::DONE;
   } else {
@@ -2494,9 +2520,9 @@ template<class Executor>
 void ExecutionBlockImpl<Executor>::PrefetchTask::updateStatus(
     Status status, std::memory_order memoryOrder) noexcept {
   auto state = _state.load(std::memory_order_relaxed);
-  while (not _state.compare_exchange_weak(
-      state, {status, state.abandoned}, memoryOrder, std::memory_order_relaxed))
-    ;
+  while (not _state.compare_exchange_weak(state, {status, state.abandoned},
+                                          memoryOrder,
+                                          std::memory_order_relaxed));
 }
 
 template<class Executor>
@@ -2637,8 +2663,9 @@ void ExecutionBlockImpl<Executor>::CallstackSplit::run(
 //       ScatterExecutor and in DistributeClientExecutor
 template<class Executor>
 auto ExecutionBlockImpl<Executor>::injectConstantBlock(
-    SharedAqlItemBlockPtr block, SkipResult skipped)
-    -> void requires std::same_as<Executor, IdExecutor<ConstFetcher>> {
+    SharedAqlItemBlockPtr block, SkipResult skipped) -> void
+  requires std::same_as<Executor, IdExecutor<ConstFetcher>>
+{
   // reinitialize the DependencyProxy
   _dependencyProxy.reset();
 
@@ -2673,7 +2700,9 @@ auto ExecutionBlockImpl<Executor>::injectConstantBlock(
 // this fact leads to instant crash on startup though.
 template<typename Executor>
 auto ExecutionBlockImpl<Executor>::getOutputRegisterId() const noexcept
-    -> RegisterId requires std::same_as<
-        Executor, IdExecutor<SingleRowFetcher<BlockPassthrough::Enable>>> {
+    -> RegisterId
+  requires std::same_as<Executor,
+                        IdExecutor<SingleRowFetcher<BlockPassthrough::Enable>>>
+{
   return _executorInfos.getOutputRegister();
 }

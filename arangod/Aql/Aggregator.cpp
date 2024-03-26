@@ -1062,7 +1062,7 @@ std::unique_ptr<Aggregator> Aggregator::fromVPack(
   }
   THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_INTERNAL, "invalid aggregator type");
 }
-
+// 从字符串构造Aggregatorfactory
 Aggregator::Factory const& Aggregator::factoryFromTypeString(
     std::string_view type) {
   auto it = ::aggregators.find(translateAlias(type));

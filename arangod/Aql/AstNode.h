@@ -23,9 +23,12 @@
 
 #pragma once
 
+#include <velocypack/ValueType.h>
+#include "Assertions/Assert.h"
 #include "Basics/ScopeGuard.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -229,6 +232,19 @@ enum AstNodeType : uint32_t {
 
 static_assert(NODE_TYPE_VALUE < NODE_TYPE_ARRAY, "incorrect node types order");
 static_assert(NODE_TYPE_ARRAY < NODE_TYPE_OBJECT, "incorrect node types order");
+
+struct AstNode;
+
+template<bool resolveAttributeAccess = true>
+int compareAstNodes(AstNode const* lhs, AstNode const* rhs, bool compareUtf8);
+
+struct AstNodeValueHash {
+  size_t operator()(AstNode const* value) const noexcept;
+};
+
+struct AstNodeValueEqual {
+  bool operator()(AstNode const* lhs, AstNode const* rhs) const;
+};
 
 /// @brief the node
 struct AstNode {
@@ -586,6 +602,67 @@ struct AstNode {
   /// @brief sets the computed value pointer.
   void setComputedValue(uint8_t* data);
 
+  static bool equal(AstNode* lhs, AstNode* rhs) {
+    TRI_ASSERT(lhs != nullptr && rhs != nullptr);
+    if (lhs->type != rhs->type) {
+      return false;
+    }
+
+    if (lhs->members.size() != rhs->members.size()) {
+      return false;
+    }
+
+    if (!valueEqual(lhs, rhs)) {
+      return false;
+    }
+
+    for (size_t i = 0; i < lhs->members.size(); i++) {
+      if (!equal(lhs->members[i], rhs->members[i])) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  static bool valueEqual(AstNode* lhs, AstNode* rhs) {
+    if (lhs->value.type != rhs->value.type) {
+      return false;
+    }
+    switch (lhs->value.type) {
+      case AstNodeValueType::VALUE_TYPE_BOOL: {
+        return lhs->getIntValue() == rhs->getIntValue();
+      }
+      case AstNodeValueType::VALUE_TYPE_INT: {
+        return lhs->getIntValue() == rhs->getIntValue();
+      }
+      case AstNodeValueType::VALUE_TYPE_DOUBLE: {
+        return lhs->getDoubleValue() == rhs->getDoubleValue();
+      }
+      case AstNodeValueType::VALUE_TYPE_STRING: {
+        if (lhs->getStringLength() != rhs->getStringLength()) {
+          return false;
+        }
+
+        int res = memcmp(lhs->getStringValue(), rhs->getStringValue(),
+                         lhs->getStringLength());
+
+        if (res != 0) {
+          return false;
+        }
+        return true;
+      }
+      case AstNodeValueType::VALUE_TYPE_NULL: {
+        if (lhs->type == NODE_TYPE_REFERENCE) {
+          return lhs->value.value._data == rhs->value.value._data;
+        }
+        return true;
+      }
+    }
+
+    return true;
+  }
+
   /// @brief the node type
   AstNodeType type;
 
@@ -626,17 +703,6 @@ struct AstNode {
 
   /// @brief the node's sub nodes
   std::vector<AstNode*> members{};
-};
-
-template<bool resolveAttributeAccess = true>
-int compareAstNodes(AstNode const* lhs, AstNode const* rhs, bool compareUtf8);
-
-struct AstNodeValueHash {
-  size_t operator()(AstNode const* value) const noexcept;
-};
-
-struct AstNodeValueEqual {
-  bool operator()(AstNode const* lhs, AstNode const* rhs) const;
 };
 }  // namespace aql
 }  // namespace arangodb

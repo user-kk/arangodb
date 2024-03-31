@@ -23,6 +23,8 @@
 
 #pragma once
 
+#include <cstddef>
+#include <unordered_map>
 #include "Aql/Ast.h"
 #include "Basics/Common.h"
 
@@ -136,6 +138,13 @@ class Parser {
   /// @brief peek at a temporary value from the parser's stack
   void* peekStack();
 
+  void addSelectMap(size_t variableId) {
+    _selectMap.insert({variableId, _selectMap.size()});
+  }
+  void clearSelectMap() { _selectMap.clear(); }
+
+  std::unordered_map<size_t, size_t>& getSelectMap() { return _selectMap; }
+
  private:
   /// @brief a pointer to the start of the query string
   QueryString const& queryString() const { return _queryString; }
@@ -168,6 +177,8 @@ class Parser {
 
   /// @brief a stack of things, used temporarily during parsing
   std::vector<void*> _stack;
+  /// @brief 变量id映射到该变量在for节点成员的索引
+  std::unordered_map<size_t, size_t> _selectMap;
 };
 }  // namespace aql
 }  // namespace arangodb

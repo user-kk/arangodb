@@ -119,19 +119,27 @@ extern int Aqldebug;
     T_OBJECT_CLOSE = 319,          /* "}"  */
     T_ARRAY_OPEN = 320,            /* "["  */
     T_ARRAY_CLOSE = 321,           /* "]"  */
-    T_OUTBOUND = 322,              /* "outbound modifier"  */
-    T_INBOUND = 323,               /* "inbound modifier"  */
-    T_ANY = 324,                   /* "any modifier"  */
-    T_ALL = 325,                   /* "all modifier"  */
-    T_NONE = 326,                  /* "none modifier"  */
-    T_AT_LEAST = 327,              /* "at least modifier"  */
-    UMINUS = 328,                  /* UMINUS  */
-    UPLUS = 329,                   /* UPLUS  */
-    UNEGATION = 330,               /* UNEGATION  */
-    FUNCCALL = 331,                /* FUNCCALL  */
-    REFERENCE = 332,               /* REFERENCE  */
-    INDEXED = 333,                 /* INDEXED  */
-    EXPANSION = 334                /* EXPANSION  */
+    T_SEMICOLON = 322,             /* ";"  */
+    T_OUTBOUND = 323,              /* "outbound modifier"  */
+    T_INBOUND = 324,               /* "inbound modifier"  */
+    T_ANY = 325,                   /* "any modifier"  */
+    T_ALL = 326,                   /* "all modifier"  */
+    T_NONE = 327,                  /* "none modifier"  */
+    T_AT_LEAST = 328,              /* "at least modifier"  */
+    T_SELECT = 329,                /* "select"  */
+    T_FROM = 330,                  /* "from"  */
+    T_AS = 331,                    /* "as"  */
+    T_WHERE = 332,                 /* "where"  */
+    T_GROUP = 333,                 /* "group"  */
+    T_ORDER = 334,                 /* "order"  */
+    T_BY = 335,                    /* "by"  */
+    UMINUS = 336,                  /* UMINUS  */
+    UPLUS = 337,                   /* UPLUS  */
+    UNEGATION = 338,               /* UNEGATION  */
+    FUNCCALL = 339,                /* FUNCCALL  */
+    REFERENCE = 340,               /* REFERENCE  */
+    INDEXED = 341,                 /* INDEXED  */
+    EXPANSION = 342                /* EXPANSION  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -150,7 +158,7 @@ union YYSTYPE
   bool                     boolval;
   int64_t                  intval;
 
-#line 153 "grammar.hpp"
+#line 161 "grammar.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;

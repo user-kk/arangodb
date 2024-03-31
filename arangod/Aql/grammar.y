@@ -54,7 +54,7 @@
 }
 
 %{
-
+#include <iostream>
 using namespace arangodb::aql;
 
 #define scanner parser->scanner()
@@ -447,6 +447,8 @@ AstNode* transformOutputVariables(Parser* parser, AstNode const* names) {
 %token T_OBJECT_CLOSE "}"
 %token T_ARRAY_OPEN "["
 %token T_ARRAY_CLOSE "]"
+%token T_SEMICOLON ";"
+
 
 %token T_END 0 "end of query string"
 
@@ -457,6 +459,16 @@ AstNode* transformOutputVariables(Parser* parser, AstNode const* names) {
 %token T_ALL "all modifier"
 %token T_NONE "none modifier"
 %token T_AT_LEAST "at least modifier"
+
+/* SQL */
+%token T_SELECT "select"
+%token T_FROM "from"
+%token T_AS "as"
+%token T_WHERE "where"
+%token T_GROUP "group"
+%token T_ORDER "order"
+%token T_BY "by"
+
 
 /* define operator precedence */
 %left T_COMMA
@@ -553,7 +565,11 @@ AstNode* transformOutputVariables(Parser* parser, AstNode const* names) {
 %type <intval> update_or_replace;
 %type <node> quantifier;
 %type <node> upsert_input;
+//sql
 
+%type <node> group_by_list;
+%type <node> group_by_variable_list;
+%type <node> group_by_statements;
 
 /* define start token of language */
 %start queryStart
@@ -616,6 +632,8 @@ optional_with:
 
 queryStart:
     optional_with query {
+    }
+  | sql_statements {
     }
   ;
 
@@ -2437,4 +2455,171 @@ variable_name:
     T_STRING {
       $$ = $1;
     }
+  ;
+
+
+/////////////////////////////////////////////////////////////////////////////////////////
+
+/*sql*/
+
+sql_statements:
+    T_FROM collection_pair_list T_SELECT {
+      auto node = parser->ast()->createNodeObject();
+      parser->pushStack(node);
+    } select_list where_statements group_by_statements order_by_statements limit_statements{
+      
+      auto node =static_cast<AstNode*>(parser->popStack());
+      auto retNode = parser->ast()->createNodeReturn(node,$7,parser->getSelectMap());
+      
+      parser->clearSelectMap();
+      
+      parser->ast()->addOperation(retNode); 
+      parser->ast()->scopes()->endNested();
+    }
+  ;
+collection_pair_list:
+    collection_pair {
+
+    }
+  |
+    collection_pair_list T_COMMA collection_pair {
+
+    }
+  ;
+collection_pair:
+    expression T_AS variable_name {
+      //得到变量名
+      AstNode* variableNameNode = parser->ast()->createNodeValueString($3.value, $3.length);
+      parser->ast()->scopes()->start(arangodb::aql::AQL_SCOPE_FOR);
+      //现在创建了一个变量节点(同时也创建一个变量)
+      AstNode* variableNode = parser->ast()->createNodeVariable(variableNameNode->getStringView(), true);
+      Variable* variable = static_cast<Variable*>(variableNode->getData());
+      //创建整个Node_type_for节点
+      AstNode* options = nullptr;
+      AstNode* node = parser->ast()->createNodeFor(variable, $1, options);
+      //向整个ast的_root添加member
+      parser->ast()->addOperation(node);
+    }
+  | expression {
+      if($1->isValueType(arangodb::aql::AstNodeValueType::VALUE_TYPE_STRING)){
+        //现在创建了一个变量节点(同时也创建一个变量)
+        AstNode* variableNode = parser->ast()->createNodeVariable($1->getStringView(), true);
+        Variable* variable = static_cast<Variable*>(variableNode->getData());
+        //创建整个Node_type_for节点
+        AstNode* options = nullptr;
+        AstNode* node = parser->ast()->createNodeFor(variable, $1, options);
+        //向整个ast的_root添加member
+        parser->ast()->addOperation(node);
+      }else{
+        parser->registerParseError(TRI_ERROR_QUERY_PARSE, "you need an alia", yylloc.first_line, yylloc.first_column);
+      }
+    }
+  ;
+
+select_list:
+    select_element{
+
+    }
+  | select_list T_COMMA select_element{
+
+    }
+  ;
+select_element:
+    expression T_AS variable_name {
+      parser->pushObjectElement($3.value, $3.length, $1);
+      size_t vId=0;
+      auto node = parser->ast()->createNodeLet($3.value, $3.length, $1, true, vId);
+      parser->addSelectMap(vId);
+      parser->ast()->addOperation(node);
+    }
+  | expression {
+      if($1->type == NODE_TYPE_ATTRIBUTE_ACCESS){
+        size_t vId=0;
+        //TODO : 名称冲突换成临时名
+        parser->pushObjectElement($1->getStringValue(), $1->getStringLength(), $1);
+        auto node = parser->ast()->createNodeLet($1->getStringValue(), $1->getStringLength(), $1, true, vId);
+        parser->addSelectMap(vId);
+        parser->ast()->addOperation(node);
+      }else{
+        parser->registerParseError(TRI_ERROR_QUERY_PARSE, "you need an alia", yylloc.first_line, yylloc.first_column);
+
+      }
+    }
+  ;
+where_statements:
+    /* empty */ {
+    }
+  | T_WHERE expression {
+      // operand is a reference. can use it directly
+      auto node = parser->ast()->createNodeFilter($2);
+      parser->ast()->addOperation(node);
+    }
+  ;
+
+group_by_statements:
+    /* empty */ {
+    }
+  | group_by_variable_list{
+
+
+
+      auto scopes = parser->ast()->scopes();
+      VarSet variablesIntroduced{};
+      if (::startCollectScope(scopes)) {//开始一个新的CollectScope,要重新注册(实际上collect_variable_list和aggregate中已经注册在上一层的scopes了)
+        ::registerAssignVariables(parser, scopes, yylloc.first_line, yylloc.first_column, variablesIntroduced, $1);
+        //todo:aggregation
+      }
+
+      AstNode const* into = ::getIntoVariable(parser, nullptr);
+      AstNode const* intoExpression = ::getIntoExpression(nullptr);
+
+      auto node = parser->ast()->createNodeCollect($1, parser->ast()->createNodeArray(),into, intoExpression, nullptr, nullptr);
+      parser->ast()->addOperation(node);
+      $$=$1;
+    }
+  ;
+group_by_variable_list:
+    T_GROUP T_BY {
+      auto node = parser->ast()->createNodeArray();
+      parser->pushStack(node);
+    } group_by_list {
+      auto list = static_cast<AstNode*>(parser->popStack());
+      TRI_ASSERT(list != nullptr);
+      $$ = list;
+    }
+  ;
+group_by_list:
+    group_by_element{
+
+    }
+  |
+    group_by_list T_COMMA group_by_element{
+
+    }
+  ;
+group_by_element:
+    expression{
+      std::string vName = parser->ast()->getTmpVariable();
+      auto node = parser->ast()->createNodeAssign(vName.c_str(), vName.size(), $1);
+      parser->pushArrayElement(node);
+    }
+  ;
+order_by_statements:
+     /* empty */ {
+    }
+  | T_ORDER T_BY {
+      auto node = parser->ast()->createNodeArray();
+      parser->pushStack(node);
+    } sort_list {
+      auto list = static_cast<AstNode const*>(parser->popStack());
+      auto node = parser->ast()->createNodeSort(list);
+      parser->ast()->addOperation(node);
+    }
+  ;
+limit_statements:
+       /* empty */ {
+    }
+  | limit_statement{
+
+  }
   ;

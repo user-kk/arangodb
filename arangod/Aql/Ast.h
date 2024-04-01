@@ -161,11 +161,6 @@ class Ast {
     return _containsParallelNode && !_willUseV8 && !_containsModificationNode;
   }
 
-  std::string getTmpVariable() {
-    std::string tmp = "tmp";
-    return tmp.append(std::to_string(_tmpVariableCount++));
-  }
-
   /// @brief convert the AST into VelocyPack
   void toVelocyPack(velocypack::Builder& builder, bool verbose) const;
 
@@ -206,7 +201,8 @@ class Ast {
   /// @brief create an AST let node, without an IF condition
   AstNode* createNodeLet(char const*, size_t, AstNode const*, bool);
   /// @brief create an AST let node, without an IF condition,并得到变量的id
-  AstNode* createNodeLet(char const*, size_t, AstNode const*, bool, size_t&);
+  /// @warning 只能用于处理select的别名,里面进行了expression节点的深拷贝
+  AstNode* createNodeLet(std::string_view, AstNode const*, bool, size_t&);
 
   /// @brief create an AST let node, without creating a variable
   AstNode* createNodeLet(AstNode const*, AstNode const*);
@@ -219,9 +215,6 @@ class Ast {
 
   /// @brief create an AST return node
   AstNode* createNodeReturn(AstNode const*);
-  AstNode* createNodeReturn(AstNode* expression, AstNode* collectNode,
-                            std::unordered_map<size_t, size_t>&);
-  void kk(AstNode*);
 
   /// @brief create an AST remove node
   AstNode* createNodeRemove(AstNode const*, AstNode const*, AstNode const*);
@@ -271,6 +264,8 @@ class Ast {
   /// @brief create an AST assign node
   AstNode* createNodeAssign(char const*, size_t, AstNode const*);
 
+  AstNode* createNodeAssign(char const*, size_t, AstNode const*, bool);
+
   /// @brief create an AST variable node
   AstNode* createNodeVariable(std::string_view name, bool isUserDefined);
 
@@ -281,7 +276,7 @@ class Ast {
   AstNode* createNodeDataSource(CollectionNameResolver const& resolver,
                                 std::string_view name,
                                 AccessMode::Type accessType, bool validateName,
-                                bool failIfDoesNotExist);
+                                bool failIfDoesNotExist, bool needPend = false);
 
   /// @brief create an AST collection node
   AstNode* createNodeCollection(CollectionNameResolver const& resolver,
@@ -455,6 +450,8 @@ class Ast {
 
   /// @brief create an AST n-ary operator
   AstNode* createNodeNaryOperator(AstNodeType, AstNode const*);
+
+  AstNode* createNodeNeedPend(std::string_view value);
 
   /// @brief injects bind parameters into the AST
   void injectBindParameters(BindParameters& parameters,
@@ -751,9 +748,6 @@ class Ast {
 
   /// @brief ast flags
   AstPropertiesFlagsType _astFlags;
-
-  /// @brief 临时变量的计数,用于创建临时变量
-  int _tmpVariableCount = 0;
 };
 
 }  // namespace aql

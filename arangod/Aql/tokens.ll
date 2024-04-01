@@ -245,6 +245,10 @@ class Parser;
   return T_BY;
 }
 
+(?i:HAVING) {
+  return T_HAVING;
+}
+
 
  /* ---------------------------------------------------------------------------
   * predefined type literals

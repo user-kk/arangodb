@@ -51,6 +51,7 @@ class FixedSizeAllocator;
 namespace aql {
 class Ast;
 struct Variable;
+class Parser;
 
 /// @brief type for node flags
 using AstNodeFlagsType = uint32_t;
@@ -227,7 +228,7 @@ enum AstNodeType : uint32_t {
   NODE_TYPE_PARAMETER_DATASOURCE = 78,
   NODE_TYPE_FOR_VIEW = 79,
   NODE_TYPE_WINDOW = 80,
-  NODE_TYPE_ARRAY_FILTER = 81,
+  NODE_TYPE_ARRAY_FILTER = 81
 };
 
 static_assert(NODE_TYPE_VALUE < NODE_TYPE_ARRAY, "incorrect node types order");
@@ -250,6 +251,7 @@ struct AstNodeValueEqual {
 struct AstNode {
   friend class Ast;
   friend class FixedSizeAllocator<AstNode>;
+  friend class Parser;
 
   /// @brief a simple tag that marks the AstNode as a constant node
   /// that will never change after being created
@@ -580,6 +582,10 @@ struct AstNode {
 
   /// @brief clone a node, recursively
   AstNode* clone(Ast*) const;
+
+  /// @brief 广度优先遍历,找到对应的点
+  [[nodiscard]] std::vector<AstNode*> find(
+      const std::function<bool(AstNode*)>& f);
 
   /// @brief append a string representation of the node into a string buffer
   /// the string representation does not need to be JavaScript-compatible

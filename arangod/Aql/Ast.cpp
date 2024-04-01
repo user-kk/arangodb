@@ -23,6 +23,7 @@
 
 #include "Ast.h"
 #include <algorithm>
+#include <string_view>
 
 #include "ApplicationFeatures/ApplicationServer.h"
 #include "Aql/Aggregator.h"
@@ -216,7 +217,7 @@ bool translateNodeStackToAttributePath(
 LogicalDataSource::Category injectDataSourceInQuery(
     Ast& ast, CollectionNameResolver const& resolver,
     AccessMode::Type accessType, bool failIfDoesNotExist,
-    std::string_view& nameRef) {
+    std::string_view& nameRef, bool NodeNeedPend = false) {
   std::string const name = std::string(nameRef);
   // NOTE The name may be modified if a numeric collection ID is given instead
   // of a collection Name. Afterwards it will contain the name.
@@ -233,8 +234,10 @@ LogicalDataSource::Category injectDataSourceInQuery(
     // for queries that are parsed-only (e.g. via `db._parse(query);`. In this
     // case it is ok that the datasource does not exist, but we need to track
     // the names of datasources used in the query
-    ast.query().collections().add(name, accessType,
-                                  aql::Collection::Hint::None);
+    if (!NodeNeedPend) {
+      ast.query().collections().add(name, accessType,
+                                    aql::Collection::Hint::None);
+    }
 
     return LogicalDataSource::Category::kCollection;
   }
@@ -539,23 +542,19 @@ AstNode* Ast::createNodeLet(char const* variableName, size_t nameLength,
 }
 
 /// @brief create an AST let node, without an IF condition
-AstNode* Ast::createNodeLet(char const* variableName, size_t nameLength,
+AstNode* Ast::createNodeLet(std::string_view variableName,
                             AstNode const* expression,
                             bool isUserDefinedVariable, size_t& variableId) {
-  if (variableName == nullptr) {
-    THROW_ARANGO_EXCEPTION(TRI_ERROR_OUT_OF_MEMORY);
-  }
-
   AstNode* node = createNode(NODE_TYPE_LET);
   node->reserve(2);
 
-  AstNode* variable = createNodeVariable(
-      std::string_view(variableName, nameLength), isUserDefinedVariable);
+  AstNode* variable = createNodeVariable(variableName, isUserDefinedVariable);
 
   variableId = static_cast<Variable*>(variable->getData())->id;
 
   node->addMember(variable);
-  node->addMember(expression);
+  AstNode* newExp = expression->clone(this);
+  node->addMember(newExp);
 
   return node;
 }
@@ -601,68 +600,6 @@ AstNode* Ast::createNodeReturn(AstNode const* expression) {
   node->addMember(expression);
 
   return node;
-}
-
-AstNode* Ast::createNodeReturn(AstNode* expression, AstNode* collectNode,
-                               std::unordered_map<size_t, size_t>& vMap) {
-  TRI_ASSERT(expression->type == NODE_TYPE_OBJECT);
-
-  if (collectNode == nullptr) {
-    AstNode* node = createNode(NODE_TYPE_RETURN);
-    node->addMember(expression);
-    return node;
-  }
-
-  TRI_ASSERT(collectNode->type == NODE_TYPE_ARRAY);
-  for (auto& assignNode : collectNode->members) {
-    TRI_ASSERT(assignNode->type == NODE_TYPE_ASSIGN &&
-               assignNode->members.size() == 2);
-    AstNode* member = assignNode->members[1];
-
-    // 检查聚集时使用的是变量还是表达式
-    if (member->type == NODE_TYPE_REFERENCE) {
-      Variable* v = static_cast<Variable*>(member->getData());
-      TRI_ASSERT(v != nullptr);
-      if (vMap.contains(v->id)) {
-        // 使用id在express.memebers[0]中寻找到对应的节点并替换
-        TRI_ASSERT(vMap[v->id] < expression->members.size());
-        TRI_ASSERT(!expression->members[vMap[v->id]]->members.empty());
-        Variable* collectVar =
-            static_cast<Variable*>(assignNode->members[0]->getData());
-        AstNode* refNode = createNodeReference(collectVar);
-        expression->members[vMap[v->id]]->members[0] = refNode;
-      } else {
-        // TODO:报错
-      }
-    } else {
-      bool found = false;
-
-      for (auto& objectElementNode : expression->members) {
-        if (AstNode::equal(objectElementNode->members[0], member)) {
-          found = true;
-          TRI_ASSERT(assignNode->members[0]->type == NODE_TYPE_VARIABLE);
-          Variable* collectVar =
-              static_cast<Variable*>(assignNode->members[0]->getData());
-          AstNode* refNode = createNodeReference(collectVar);
-          objectElementNode->members[0] = refNode;
-        }
-      }
-
-      if (!found) {
-        // TODO:报错
-      }
-    }
-  }
-
-  AstNode* node = createNode(NODE_TYPE_RETURN);
-  node->addMember(expression);
-
-  return node;
-}
-
-void Ast::kk(AstNode* e) {
-  TRI_ASSERT(e != nullptr);
-  return;
 }
 
 /// @brief create an AST remove node
@@ -932,6 +869,22 @@ AstNode* Ast::createNodeAssign(char const* variableName, size_t nameLength,
   return node;
 }
 
+AstNode* Ast::createNodeAssign(char const* variableName, size_t nameLength,
+                               AstNode const* expression, bool isUserDefined) {
+  if (variableName == nullptr) {
+    THROW_ARANGO_EXCEPTION(TRI_ERROR_OUT_OF_MEMORY);
+  }
+
+  AstNode* node = createNode(NODE_TYPE_ASSIGN);
+  node->reserve(2);
+  AstNode* variable = createNodeVariable(
+      std::string_view(variableName, nameLength), isUserDefined);
+  node->addMember(variable);
+  node->addMember(expression);
+
+  return node;
+}
+
 /// @brief create an AST variable node
 AstNode* Ast::createNodeVariable(std::string_view name, bool isUserDefined) {
   if (name.empty()) {
@@ -968,12 +921,14 @@ AstNode* Ast::createNodeVariable(std::string_view name, bool isUserDefined) {
 AstNode* Ast::createNodeDataSource(CollectionNameResolver const& resolver,
                                    std::string_view name,
                                    AccessMode::Type accessType,
-                                   bool validateName, bool failIfDoesNotExist) {
+                                   bool validateName, bool failIfDoesNotExist,
+                                   bool needPend) {
   // will throw if validation fails
   validateDataSourceName(name, validateName);
-  // this call may update name
+
+  //  this call may update name
   LogicalCollection::Category category = injectDataSourceInQuery(
-      *this, resolver, accessType, failIfDoesNotExist, name);
+      *this, resolver, accessType, failIfDoesNotExist, name, needPend);
 
   if (category == LogicalDataSource::Category::kCollection) {
     return createNodeCollectionNoValidation(name, accessType);

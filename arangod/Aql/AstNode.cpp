@@ -40,6 +40,8 @@
 #include "Transaction/Methods.h"
 
 #include <array>
+#include <queue>
+#include <vector>
 #ifdef ARANGODB_ENABLE_MAINTAINER_MODE
 #include <iostream>
 #endif
@@ -2808,4 +2810,20 @@ template int compareAstNodes<true>(AstNode const* lhs, AstNode const* rhs,
 template int compareAstNodes<false>(AstNode const* lhs, AstNode const* rhs,
                                     bool compareUtf8);
 
+std::vector<AstNode*> AstNode::find(const std::function<bool(AstNode*)>& f) {
+  std::vector<AstNode*> result;
+  std::queue<AstNode*> q;
+  q.push(this);
+  while (!q.empty()) {
+    if (f(q.front())) {
+      result.push_back(q.front());
+    }
+    for (auto member : q.front()->members) {
+      q.push(member);
+    }
+    q.pop();
+  }
+
+  return result;
+};
 }  // namespace arangodb::aql

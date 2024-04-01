@@ -70,6 +70,10 @@ void Aqlerror(YYLTYPE* locp,
 }
 
 namespace {
+  struct strval {
+  char*                  value;
+  size_t                 length;
+  };
 
 bool caseInsensitiveEqual(std::string_view lhs, std::string_view rhs) noexcept {
   return std::equal(lhs.begin(), lhs.end(), rhs.begin(), rhs.end(), [](char l, char r) {
@@ -468,6 +472,7 @@ AstNode* transformOutputVariables(Parser* parser, AstNode const* names) {
 %token T_GROUP "group"
 %token T_ORDER "order"
 %token T_BY "by"
+%token T_HAVING "having"
 
 
 /* define operator precedence */
@@ -570,6 +575,7 @@ AstNode* transformOutputVariables(Parser* parser, AstNode const* names) {
 %type <node> group_by_list;
 %type <node> group_by_variable_list;
 %type <node> group_by_statements;
+%type <node> having_statements;
 
 /* define start token of language */
 %start queryStart
@@ -2162,10 +2168,9 @@ graph_direction_steps:
 
 reference:
     T_STRING {
-      // variable or collection or view
-      auto ast = parser->ast();
       AstNode* node = nullptr;
 
+      auto ast = parser->ast();
       std::string_view variableName($1.value, $1.length);
       auto variable = ast->scopes()->getVariable(variableName, true);
 
@@ -2186,11 +2191,17 @@ reference:
       if (node == nullptr) {//为collection时
         // variable not found. so it must have been a collection or view
         auto const& resolver = parser->query().resolver();
-        node = ast->createNodeDataSource(resolver, variableName, arangodb::AccessMode::Type::READ, true, false);
+        node = ast->createNodeDataSource(resolver, variableName, arangodb::AccessMode::Type::READ, true, false,parser->isSelect()||parser->isHaving());
       }
-
       TRI_ASSERT(node != nullptr);
 
+      if(parser->isSelect()){
+        parser->pushSelectPending(node,std::string_view{$1.value, $1.length});
+      }
+      if(parser->isHaving()){
+        parser->pushHavingPending(node,std::string_view{$1.value, $1.length});
+      }
+      
       $$ = node;
     }
   | compound_value {
@@ -2463,15 +2474,23 @@ variable_name:
 /*sql*/
 
 sql_statements:
-    T_FROM collection_pair_list T_SELECT {
+    T_SELECT {
       auto node = parser->ast()->createNodeObject();
       parser->pushStack(node);
-    } select_list where_statements group_by_statements order_by_statements limit_statements{
+      parser->beginSelect();
+    } select_list {parser->endSelect(); } T_FROM collection_pair_list {
+      //设置let节点
+      parser->executeSelectPendWithoutPop();
+      parser->produceAlias();
+    } where_statements group_by_statements order_by_statements limit_statements{
       
+      //设置return节点,
+      parser->executeSelectPend();
+
       auto node =static_cast<AstNode*>(parser->popStack());
-      auto retNode = parser->ast()->createNodeReturn(node,$7,parser->getSelectMap());
+      auto retNode = parser->ast()->createNodeReturn(node);
       
-      parser->clearSelectMap();
+      
       
       parser->ast()->addOperation(retNode); 
       parser->ast()->scopes()->endNested();
@@ -2489,8 +2508,8 @@ collection_pair_list:
 collection_pair:
     expression T_AS variable_name {
       //得到变量名
-      AstNode* variableNameNode = parser->ast()->createNodeValueString($3.value, $3.length);
       parser->ast()->scopes()->start(arangodb::aql::AQL_SCOPE_FOR);
+      AstNode* variableNameNode = parser->ast()->createNodeValueString($3.value, $3.length);
       //现在创建了一个变量节点(同时也创建一个变量)
       AstNode* variableNode = parser->ast()->createNodeVariable(variableNameNode->getStringView(), true);
       Variable* variable = static_cast<Variable*>(variableNode->getData());
@@ -2503,6 +2522,7 @@ collection_pair:
   | expression {
       if($1->isValueType(arangodb::aql::AstNodeValueType::VALUE_TYPE_STRING)){
         //现在创建了一个变量节点(同时也创建一个变量)
+        parser->ast()->scopes()->start(arangodb::aql::AQL_SCOPE_FOR);
         AstNode* variableNode = parser->ast()->createNodeVariable($1->getStringView(), true);
         Variable* variable = static_cast<Variable*>(variableNode->getData());
         //创建整个Node_type_for节点
@@ -2527,19 +2547,15 @@ select_list:
 select_element:
     expression T_AS variable_name {
       parser->pushObjectElement($3.value, $3.length, $1);
-      size_t vId=0;
-      auto node = parser->ast()->createNodeLet($3.value, $3.length, $1, true, vId);
-      parser->addSelectMap(vId);
-      parser->ast()->addOperation(node);
+      parser->pushAliasQueue($1,std::string_view{$3.value, $3.length});
+
     }
   | expression {
       if($1->type == NODE_TYPE_ATTRIBUTE_ACCESS){
-        size_t vId=0;
         //TODO : 名称冲突换成临时名
         parser->pushObjectElement($1->getStringValue(), $1->getStringLength(), $1);
-        auto node = parser->ast()->createNodeLet($1->getStringValue(), $1->getStringLength(), $1, true, vId);
-        parser->addSelectMap(vId);
-        parser->ast()->addOperation(node);
+        parser->pushAliasQueue($1,std::string_view{$1->getStringValue(),$1->getStringLength()});
+
       }else{
         parser->registerParseError(TRI_ERROR_QUERY_PARSE, "you need an alia", yylloc.first_line, yylloc.first_column);
 
@@ -2558,24 +2574,47 @@ where_statements:
 
 group_by_statements:
     /* empty */ {
+      //检查是否有聚集
+      AstNode* aggNode=parser->produceAggregate();
+      if(aggNode->numMembers()!=0){ //有聚集函数,创建聚集
+        VarSet variablesIntroduced{};
+        auto scopes = parser->ast()->scopes();
+
+        if (::startCollectScope(scopes)) {
+          ::registerAssignVariables(parser, scopes, yylloc.first_line, yylloc.first_column, variablesIntroduced, aggNode);
+        }
+        AstNode const* into = ::getIntoVariable(parser, nullptr);
+        AstNode const* intoExpression = ::getIntoExpression(nullptr);
+
+        auto node = parser->ast()->createNodeCollect(parser->ast()->createNodeArray(), aggNode, into, intoExpression, nullptr, nullptr);
+        parser->ast()->addOperation(node);
+      }
+
     }
-  | group_by_variable_list{
+  | group_by_variable_list { parser->beginHaving(); }having_statements {
 
-
+      parser->endHaving($3);
+      AstNode* aggNode=parser->produceAggregate();
 
       auto scopes = parser->ast()->scopes();
       VarSet variablesIntroduced{};
       if (::startCollectScope(scopes)) {//开始一个新的CollectScope,要重新注册(实际上collect_variable_list和aggregate中已经注册在上一层的scopes了)
         ::registerAssignVariables(parser, scopes, yylloc.first_line, yylloc.first_column, variablesIntroduced, $1);
-        //todo:aggregation
+        ::registerAssignVariables(parser, scopes, yylloc.first_line, yylloc.first_column, variablesIntroduced, aggNode);
       }
 
       AstNode const* into = ::getIntoVariable(parser, nullptr);
       AstNode const* intoExpression = ::getIntoExpression(nullptr);
 
-      auto node = parser->ast()->createNodeCollect($1, parser->ast()->createNodeArray(),into, intoExpression, nullptr, nullptr);
+      auto node = parser->ast()->createNodeCollect($1,aggNode,into, intoExpression, nullptr, nullptr);
       parser->ast()->addOperation(node);
-      $$=$1;
+
+      //处理having
+      if($3!=nullptr){
+        parser->executeHavingPend();
+        auto filterNode = parser->ast()->createNodeFilter($3);
+        parser->ast()->addOperation(filterNode);
+      }
     }
   ;
 group_by_variable_list:
@@ -2599,9 +2638,18 @@ group_by_list:
   ;
 group_by_element:
     expression{
-      std::string vName = parser->ast()->getTmpVariable();
-      auto node = parser->ast()->createNodeAssign(vName.c_str(), vName.size(), $1);
+      std::string vName = parser->ast()->variables()->nextName();
+      auto node = parser->ast()->createNodeAssign(vName.c_str(), vName.size(), $1,false);
+      parser->updateWillReturnNode(node);
       parser->pushArrayElement(node);
+    }
+  ;
+having_statements:
+    /*empty*/{
+      $$=nullptr;
+    }
+  | T_HAVING expression {
+      $$=$2;
     }
   ;
 order_by_statements:

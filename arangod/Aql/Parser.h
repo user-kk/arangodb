@@ -24,8 +24,11 @@
 #pragma once
 
 #include <cstddef>
+#include <deque>
+#include <string_view>
 #include <unordered_map>
 #include "Aql/Ast.h"
+#include "Aql/Variable.h"
 #include "Basics/Common.h"
 
 namespace arangodb {
@@ -138,12 +141,64 @@ class Parser {
   /// @brief peek at a temporary value from the parser's stack
   void* peekStack();
 
-  void addSelectMap(size_t variableId) {
-    _selectMap.insert({variableId, _selectMap.size()});
+  void addSelectMap(size_t variableId, size_t index) {
+    _selectMap.insert({variableId, index});
   }
+
   void clearSelectMap() { _selectMap.clear(); }
 
   std::unordered_map<size_t, size_t>& getSelectMap() { return _selectMap; }
+
+  void beginSelect() { _isSelect = true; }
+
+  void endSelect() {
+    _isSelect = false;
+    _willReturnNode = static_cast<AstNode*>(this->peekStack());
+  }
+
+  void beginHaving() { _having = true; }
+
+  void endHaving(AstNode* expr) {
+    _having = false;
+    _havingExprssionNode = expr;
+  }
+
+  void setSelect(bool isSelect) { _isSelect = isSelect; }
+
+  bool isSelect() { return _isSelect; }
+  bool isHaving() { return _having; }
+
+  void pushSelectPending(AstNode* p, std::string_view s) {
+    _selectPendingQueue.push_back({p, s});
+  }
+
+  void pushHavingPending(AstNode* p, std::string_view s) {
+    _havingPendingQueue.push_back({p, s});
+  }
+
+  void pushAliasQueue(AstNode* p, std::string_view s) {
+    _selectAliasQueue.push_back({p, s});
+  }
+
+  /// @brief 将待判定的节点变成collection节点或variableRef节点
+  /// @warning 这个会清空判定队列和select_map
+  void executeSelectPend();
+
+  /// @brief 将待判定的节点变成collection节点或variableRef节点
+  void executeSelectPendWithoutPop();
+
+  /// @brief 生成别名的let节点
+  void produceAlias();
+
+  /// @brief 替换掉return节点的被group_by的变量
+  /// @param  assignNode group_by产生的赋值节点
+  void updateWillReturnNode(AstNode* assignNode);
+
+  AstNode* produceAggregate();
+
+  /// @brief 将待判定的节点变成collection节点或variableRef节点
+  /// @warning 这个会清空判定队列
+  void executeHavingPend();
 
  private:
   /// @brief a pointer to the start of the query string
@@ -177,8 +232,23 @@ class Parser {
 
   /// @brief a stack of things, used temporarily during parsing
   std::vector<void*> _stack;
+
   /// @brief 变量id映射到该变量在for节点成员的索引
   std::unordered_map<size_t, size_t> _selectMap;
+
+  bool _isSelect = false;
+
+  bool _having = false;
+
+  std::deque<std::pair<AstNode*, std::string_view>> _selectPendingQueue;
+  std::deque<std::pair<AstNode*, std::string_view>> _havingPendingQueue;
+
+  AstNode* _willReturnNode = nullptr;
+  AstNode* _havingExprssionNode = nullptr;
+
+  std::deque<std::pair<AstNode*, std::string_view>> _selectAliasQueue;
+  ///@brief 调用了聚集函数的字段的别名和其对应的聚集变量(处理having时使用)
+  std::unordered_map<std::string_view, Variable*> _aggAliasToVar;
 };
 }  // namespace aql
 }  // namespace arangodb

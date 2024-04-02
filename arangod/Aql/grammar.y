@@ -576,6 +576,7 @@ AstNode* transformOutputVariables(Parser* parser, AstNode const* names) {
 %type <node> group_by_variable_list;
 %type <node> group_by_statements;
 %type <node> having_statements;
+%type <boolval> distinct_label;
 
 /* define start token of language */
 %start queryStart
@@ -2478,7 +2479,7 @@ sql_statements:
       auto node = parser->ast()->createNodeObject();
       parser->pushStack(node);
       parser->beginSelect();
-    } select_list {parser->endSelect(); } T_FROM collection_pair_list {
+    } distinct_label select_list {parser->endSelect(); } T_FROM collection_pair_list {
       //设置let节点
       parser->executeSelectPendWithoutPop();
       parser->produceAlias();
@@ -2488,9 +2489,21 @@ sql_statements:
       parser->executeSelectPend();
 
       auto node =static_cast<AstNode*>(parser->popStack());
-      auto retNode = parser->ast()->createNodeReturn(node);
-      
-      
+      AstNode* retNode = nullptr;
+
+      if($3==true){//存在distinct
+        auto const scopeType = parser->ast()->scopes()->type();
+
+        if (scopeType == AQL_SCOPE_MAIN ||
+            scopeType == AQL_SCOPE_SUBQUERY) {
+          parser->registerParseError(TRI_ERROR_QUERY_PARSE, "cannot use DISTINCT modifier on top-level query element", yylloc.first_line, yylloc.first_column);
+        }
+        AstNode* disNode = parser->ast()->createNodeDistinct(node);
+        retNode = parser->ast()->createNodeReturn(disNode);
+
+      }else{
+        retNode = parser->ast()->createNodeReturn(node);
+      }
       
       parser->ast()->addOperation(retNode); 
       parser->ast()->scopes()->endNested();
@@ -2533,6 +2546,15 @@ collection_pair:
       }else{
         parser->registerParseError(TRI_ERROR_QUERY_PARSE, "you need an alia", yylloc.first_line, yylloc.first_column);
       }
+    }
+  ;
+
+distinct_label:
+    /*empty*/{
+      $$=false;
+    }
+  | T_DISTINCT {
+      $$=true;
     }
   ;
 

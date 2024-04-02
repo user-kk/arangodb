@@ -25,10 +25,12 @@
 
 #include <cstddef>
 #include <deque>
+#include <stack>
 #include <string_view>
 #include <unordered_map>
 #include "Aql/Ast.h"
 #include "Aql/Variable.h"
+#include "Assertions/Assert.h"
 #include "Basics/Common.h"
 
 namespace arangodb {
@@ -141,43 +143,47 @@ class Parser {
   /// @brief peek at a temporary value from the parser's stack
   void* peekStack();
 
-  void addSelectMap(size_t variableId, size_t index) {
-    _selectMap.insert({variableId, index});
-  }
+  void beginSQL() { _sqlContext.push({}); }
 
-  void clearSelectMap() { _selectMap.clear(); }
+  void endSQL() { _sqlContext.pop(); }
 
-  std::unordered_map<size_t, size_t>& getSelectMap() { return _selectMap; }
-
-  void beginSelect() { _isSelect = true; }
+  void beginSelect() { sqlContext()._isSelect = true; }
 
   void endSelect() {
-    _isSelect = false;
-    _willReturnNode = static_cast<AstNode*>(this->peekStack());
+    sqlContext()._isSelect = false;
+    sqlContext()._willReturnNode = static_cast<AstNode*>(this->peekStack());
   }
 
-  void beginHaving() { _having = true; }
+  void beginHaving() { sqlContext()._having = true; }
 
   void endHaving(AstNode* expr) {
-    _having = false;
-    _havingExprssionNode = expr;
+    sqlContext()._having = false;
+    sqlContext()._havingExprssionNode = expr;
   }
 
-  void setSelect(bool isSelect) { _isSelect = isSelect; }
-
-  bool isSelect() { return _isSelect; }
-  bool isHaving() { return _having; }
+  bool isSelect() {
+    if (_sqlContext.empty()) {
+      return false;
+    }
+    return sqlContext()._isSelect;
+  }
+  bool isHaving() {
+    if (_sqlContext.empty()) {
+      return false;
+    }
+    return sqlContext()._having;
+  }
 
   void pushSelectPending(AstNode* p, std::string_view s) {
-    _selectPendingQueue.push_back({p, s});
+    sqlContext()._selectPendingQueue.push_back({p, s});
   }
 
   void pushHavingPending(AstNode* p, std::string_view s) {
-    _havingPendingQueue.push_back({p, s});
+    sqlContext()._havingPendingQueue.push_back({p, s});
   }
 
   void pushAliasQueue(AstNode* p, std::string_view s) {
-    _selectAliasQueue.push_back({p, s});
+    sqlContext()._selectAliasQueue.push_back({p, s});
   }
 
   /// @brief 将待判定的节点变成collection节点或variableRef节点
@@ -199,6 +205,16 @@ class Parser {
   /// @brief 将待判定的节点变成collection节点或variableRef节点
   /// @warning 这个会清空判定队列
   void executeHavingPend();
+
+  void kk();
+
+ private:
+  struct SQLContext;
+
+  [[nodiscard]] SQLContext& sqlContext() {
+    TRI_ASSERT(!_sqlContext.empty());
+    return _sqlContext.top();
+  }
 
  private:
   /// @brief a pointer to the start of the query string
@@ -233,22 +249,28 @@ class Parser {
   /// @brief a stack of things, used temporarily during parsing
   std::vector<void*> _stack;
 
-  /// @brief 变量id映射到该变量在for节点成员的索引
-  std::unordered_map<size_t, size_t> _selectMap;
+  struct SQLContext {
+    /// @brief
+    /// 变量映射到在select子句中直接引用该变量的表达式(处理group_by时使用)
+    std::unordered_map<Variable*, AstNode*> _selectMap;
+    ///@brief 调用了聚集函数的字段的别名和其对应的聚集变量(处理having时使用)
+    std::unordered_map<std::string_view, Variable*> _aggAliasToVar;
 
-  bool _isSelect = false;
+    bool _isSelect = false;
+    bool _having = false;
+    ///@brief 用于替换select子句中的表达式
+    std::deque<std::pair<AstNode*, std::string_view>> _selectPendingQueue;
+    ///@brief 用于替换having子句中的表达式
+    std::deque<std::pair<AstNode*, std::string_view>> _havingPendingQueue;
+    ///@brief 记录当前返回的节点
+    AstNode* _willReturnNode = nullptr;
+    ///@brief 记录当前having表达式的节点
+    AstNode* _havingExprssionNode = nullptr;
+    ///@brief 用于生成let子句(处理select子句中的别名)
+    std::deque<std::pair<AstNode*, std::string_view>> _selectAliasQueue;
+  };
 
-  bool _having = false;
-
-  std::deque<std::pair<AstNode*, std::string_view>> _selectPendingQueue;
-  std::deque<std::pair<AstNode*, std::string_view>> _havingPendingQueue;
-
-  AstNode* _willReturnNode = nullptr;
-  AstNode* _havingExprssionNode = nullptr;
-
-  std::deque<std::pair<AstNode*, std::string_view>> _selectAliasQueue;
-  ///@brief 调用了聚集函数的字段的别名和其对应的聚集变量(处理having时使用)
-  std::unordered_map<std::string_view, Variable*> _aggAliasToVar;
+  std::stack<SQLContext> _sqlContext;
 };
 }  // namespace aql
 }  // namespace arangodb

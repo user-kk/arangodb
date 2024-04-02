@@ -24,6 +24,7 @@
 #include "Parser.h"
 
 #include "Aql/Function.h"
+#include "Aql/Variable.h"
 #include "Assertions/Assert.h"
 #include "Basics/Common.h"
 #include "Basics/ScopeGuard.h"
@@ -246,10 +247,11 @@ void* Parser::peekStack() {
 
 void Parser::executeSelectPend() {
   AstNode* pendingNode = nullptr;
-  while (!_selectPendingQueue.empty()) {
-    pendingNode = _selectPendingQueue.front().first;
+  SQLContext& ctx = sqlContext();
+  while (!ctx._selectPendingQueue.empty()) {
+    pendingNode = ctx._selectPendingQueue.front().first;
 
-    std::string_view variableName = _selectPendingQueue.front().second;
+    std::string_view variableName = ctx._selectPendingQueue.front().second;
     auto variable = _ast.scopes()->getVariable(variableName, true);
 
     if (variable == nullptr) {
@@ -278,69 +280,66 @@ void Parser::executeSelectPend() {
     TRI_ASSERT(node != nullptr);
 
     *pendingNode = *node;
-    _selectPendingQueue.pop_front();
+    ctx._selectPendingQueue.pop_front();
   }
-  clearSelectMap();
+  ctx._selectMap.clear();
 }
 
 void Parser::updateWillReturnNode(AstNode* assignNode) {
   TRI_ASSERT(assignNode->type == NODE_TYPE_ASSIGN &&
-             assignNode->members.size() == 2);
+             assignNode->members.size() == 2 &&
+             assignNode->members[0]->type == NODE_TYPE_VARIABLE);
+  SQLContext& ctx = sqlContext();
   AstNode* member = assignNode->members[1];
 
   // 检查聚集时使用的是变量还是表达式
   if (member->type == NODE_TYPE_REFERENCE) {
     Variable* v = static_cast<Variable*>(member->getData());
     TRI_ASSERT(v != nullptr);
-    if (_selectMap.contains(v->id)) {
+    if (ctx._selectMap.contains(v)) {
       // 使用id在express.memebers[0]中寻找到对应的节点并替换
-      TRI_ASSERT(_selectMap[v->id] < _willReturnNode->members.size());
-      TRI_ASSERT(!_willReturnNode->members[_selectMap[v->id]]->members.empty());
       Variable* collectVar =
           static_cast<Variable*>(assignNode->members[0]->getData());
       AstNode* refNode = _ast.createNodeReference(collectVar);
-      _willReturnNode->members[_selectMap[v->id]]->members[0] = refNode;
+      *(ctx._selectMap[v]) = *refNode;
     } else {
       // TODO:报错
     }
   } else {
-    bool found = false;
-
-    for (auto& objectElementNode : _willReturnNode->members) {
-      if (AstNode::equal(objectElementNode->members[0], member)) {
-        found = true;
-        TRI_ASSERT(assignNode->members[0]->type == NODE_TYPE_VARIABLE);
-        Variable* collectVar =
-            static_cast<Variable*>(assignNode->members[0]->getData());
-        AstNode* refNode = _ast.createNodeReference(collectVar);
-        objectElementNode->members[0] = refNode;
-      }
+    std::vector<AstNode*> needReplace = ctx._willReturnNode->find(
+        [member](AstNode* p) { return AstNode::equal(p, member); },
+        [](AstNode* p) { return p->type == NODE_TYPE_SUBQUERY; });
+    for (AstNode* node : needReplace) {
+      Variable* collectVar =
+          static_cast<Variable*>(assignNode->members[0]->getData());
+      AstNode* refNode = _ast.createNodeReference(collectVar);
+      *node = *refNode;
     }
-
-    if (!found) {
+    if (needReplace.empty()) {
       // TODO:报错
     }
   }
 }
 
 void arangodb::aql::Parser::produceAlias() {
-  for (size_t i = 0; i < _selectAliasQueue.size(); ++i) {
-    auto [exprNode, name] = _selectAliasQueue[i];
-
+  SQLContext& ctx = sqlContext();
+  for (auto [exprNode, name] : ctx._selectAliasQueue) {
     if (exprNode->type == NODE_TYPE_FCALL) {
       continue;
     }
 
-    size_t vId = 0;
-    auto node = _ast.createNodeLet(name, exprNode, true, vId);
-    addSelectMap(vId, i);
+    Variable* vPtr = nullptr;
+    auto node = _ast.createNodeLet(name, exprNode, true, vPtr);
+    TRI_ASSERT(vPtr != nullptr);
+    ctx._selectMap.insert({vPtr, exprNode});
     _ast.addOperation(node);
   }
-
-  _selectAliasQueue.clear();
+  ctx._selectAliasQueue.clear();
 };
+
 void arangodb::aql::Parser::executeSelectPendWithoutPop() {
-  for (auto& [pendingNode, variableName] : _selectPendingQueue) {
+  SQLContext& ctx = sqlContext();
+  for (auto& [pendingNode, variableName] : ctx._selectPendingQueue) {
     auto variable = _ast.scopes()->getVariable(variableName, true);
 
     if (variable == nullptr) {
@@ -375,9 +374,9 @@ void arangodb::aql::Parser::executeSelectPendWithoutPop() {
 arangodb::aql::AstNode* arangodb::aql::Parser::produceAggregate() {
   // 聚集函数的节点和它的别名
   std::unordered_map<AstNode*, std::string_view> map;
-
+  SQLContext& ctx = sqlContext();
   // 遍历找到fcall的节点,检查是否是聚集函数
-  for (auto& objectElementNode : _willReturnNode->members) {
+  for (auto& objectElementNode : ctx._willReturnNode->members) {
     if (objectElementNode->type != NODE_TYPE_OBJECT_ELEMENT) {
       break;
     }
@@ -400,8 +399,8 @@ arangodb::aql::AstNode* arangodb::aql::Parser::produceAggregate() {
   // 要返回的结果
   AstNode* aggArrayNode = _ast.createNodeArray();
 
-  std::vector<AstNode*> fAggNodes =
-      _willReturnNode->find([](AstNode* p) -> bool {
+  std::vector<AstNode*> fAggNodes = ctx._willReturnNode->find(
+      [](AstNode* p) -> bool {
         // 找到fcall的节点,检查是否是聚集函数
         if (p->type != NODE_TYPE_FCALL) {
           return false;
@@ -412,7 +411,8 @@ arangodb::aql::AstNode* arangodb::aql::Parser::produceAggregate() {
         }
 
         return true;
-      });
+      },
+      [](AstNode* p) { return p->type == NODE_TYPE_SUBQUERY; });
   for (AstNode* fNode : fAggNodes) {
     // 现在确定了是聚集函数
     AstNode* fAggNode = fNode->clone(&_ast);
@@ -428,19 +428,19 @@ arangodb::aql::AstNode* arangodb::aql::Parser::produceAggregate() {
     // 修改
     Variable* var = static_cast<Variable*>(assignNode->members[0]->getData());
     if (map.contains(fNode)) {
-      _aggAliasToVar.insert({map[fNode], var});
+      ctx._aggAliasToVar.insert({map[fNode], var});
     }
     AstNode* refNode = _ast.createNodeReference(var);
     *fNode = *refNode;
   }
 
-  if (_havingExprssionNode == nullptr) {
+  if (ctx._havingExprssionNode == nullptr) {
     return aggArrayNode;
   }
 
   // 现在having中一定有值,修改having中的聚集表达式,使之成为聚集变量
-  std::vector<AstNode*> fAggNodesInHaving =
-      _havingExprssionNode->find([](AstNode* p) -> bool {
+  std::vector<AstNode*> fAggNodesInHaving = ctx._havingExprssionNode->find(
+      [](AstNode* p) -> bool {
         // 找到fcall的节点,检查是否是聚集函数
         if (p->type != NODE_TYPE_FCALL) {
           return false;
@@ -451,7 +451,8 @@ arangodb::aql::AstNode* arangodb::aql::Parser::produceAggregate() {
         }
 
         return true;
-      });
+      },
+      [](AstNode* p) { return p->type == NODE_TYPE_SUBQUERY; });
   for (AstNode* fNode : fAggNodesInHaving) {
     // 现在确定了是聚集函数
     AstNode* fAggNode = fNode->clone(&_ast);
@@ -472,12 +473,14 @@ arangodb::aql::AstNode* arangodb::aql::Parser::produceAggregate() {
 
   return aggArrayNode;
 };
+
 void arangodb::aql::Parser::executeHavingPend() {
   AstNode* pendingNode = nullptr;
-  while (!_havingPendingQueue.empty()) {
-    pendingNode = _havingPendingQueue.front().first;
+  SQLContext& ctx = sqlContext();
+  while (!ctx._havingPendingQueue.empty()) {
+    pendingNode = ctx._havingPendingQueue.front().first;
 
-    std::string_view variableName = _havingPendingQueue.front().second;
+    std::string_view variableName = ctx._havingPendingQueue.front().second;
     auto variable = _ast.scopes()->getVariable(variableName, true);
 
     if (variable == nullptr) {
@@ -496,8 +499,8 @@ void arangodb::aql::Parser::executeHavingPend() {
     }
     // 为collection时
     if (node == nullptr) {
-      if (_aggAliasToVar.contains(variableName)) {  // 检测是否是聚集变量
-        auto v = _aggAliasToVar[variableName];
+      if (ctx._aggAliasToVar.contains(variableName)) {  // 检测是否是聚集变量
+        auto v = ctx._aggAliasToVar[variableName];
         node = _ast.createNodeReference(v);
       } else {
         // variable not found. so it must have been a collection or view
@@ -511,6 +514,10 @@ void arangodb::aql::Parser::executeHavingPend() {
     TRI_ASSERT(node != nullptr);
 
     *pendingNode = *node;
-    _havingPendingQueue.pop_front();
+    ctx._havingPendingQueue.pop_front();
   }
+};
+void arangodb::aql::Parser::kk() {
+  TRI_ASSERT(!_sqlContext.empty());
+  return;
 };

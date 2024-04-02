@@ -39,6 +39,7 @@
 #include "Aql/Quantifier.h"
 #include "Aql/QueryContext.h"
 #include "Aql/AqlFunctionsInternalCache.h"
+#include "Aql/Variable.h"
 #include "Assertions/Assert.h"
 #include "Basics/Arithmetic.h"
 #include "Basics/Exceptions.h"
@@ -544,15 +545,16 @@ AstNode* Ast::createNodeLet(char const* variableName, size_t nameLength,
 /// @brief create an AST let node, without an IF condition
 AstNode* Ast::createNodeLet(std::string_view variableName,
                             AstNode const* expression,
-                            bool isUserDefinedVariable, size_t& variableId) {
+                            bool isUserDefinedVariable, Variable*& vPtr) {
   AstNode* node = createNode(NODE_TYPE_LET);
   node->reserve(2);
 
   AstNode* variable = createNodeVariable(variableName, isUserDefinedVariable);
 
-  variableId = static_cast<Variable*>(variable->getData())->id;
+  vPtr = static_cast<Variable*>(variable->getData());
 
   node->addMember(variable);
+  //!!! clone防止被select的pend修改
   AstNode* newExp = expression->clone(this);
   node->addMember(newExp);
 
@@ -4431,3 +4433,42 @@ AstNode const* Ast::getSubqueryForVariable(Variable const* variable) const {
   }
   return nullptr;
 }
+arangodb::aql::AstNode* arangodb::aql::Ast::createNodeCoverVariable(
+    std::string_view name, bool isUserDefined) {
+  if (name.empty()) {
+    THROW_ARANGO_EXCEPTION(TRI_ERROR_OUT_OF_MEMORY);
+  }
+
+  if (_scopes.existsVariable(name)) {
+    if (!isUserDefined &&
+        (name == Variable::NAME_OLD || name == Variable::NAME_NEW)) {
+      // special variable
+      auto variable = _variables.createVariable(name, isUserDefined);
+      _scopes.replaceVariable(variable);
+
+      AstNode* node = createNode(NODE_TYPE_VARIABLE);
+      node->setData(static_cast<void*>(variable));
+
+      return node;
+    }
+    if (!isUserDefined && !_scopes.existsVariableInCurrentScope(name)) {
+      // special variable
+      auto variable = _variables.createVariable(name, isUserDefined);
+      _scopes.replaceVariable(variable);
+
+      AstNode* node = createNode(NODE_TYPE_VARIABLE);
+      node->setData(static_cast<void*>(variable));
+      return node;
+    }
+
+    ::throwFormattedError(_query, TRI_ERROR_QUERY_VARIABLE_REDECLARED, name);
+  }
+
+  auto variable = _variables.createVariable(name, isUserDefined);
+  _scopes.addVariable(variable);
+
+  AstNode* node = createNode(NODE_TYPE_VARIABLE);
+  node->setData(static_cast<void*>(variable));
+
+  return node;
+};

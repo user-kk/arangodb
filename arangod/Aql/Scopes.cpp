@@ -223,3 +223,12 @@ void Scopes::unstackCurrentVariable() {
 
   _currentVariables.pop_back();
 }
+bool arangodb::aql::Scopes::existsVariableInCurrentScope(
+    std::string_view name) const {
+  TRI_ASSERT(!_activeScopes.empty());
+
+  auto& currentScope = _activeScopes.back();
+  auto variable = currentScope->getVariable(name);
+
+  return variable != nullptr;
+};

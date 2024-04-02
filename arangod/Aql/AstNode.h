@@ -99,6 +99,7 @@ enum AstNodeFlagType : AstNodeFlagsType {
 
   FLAG_READ_OWN_WRITES =
       0x0400000,  // reads own writes (only needed for UPSERT FOR nodes)
+  FLAG_TIMES = 0x1000000  // 这个节点是使用.*语法创建的,不会被创建别名
 };
 
 /// @brief enumeration of AST node value types
@@ -585,7 +586,12 @@ struct AstNode {
 
   /// @brief 广度优先遍历,找到对应的点
   [[nodiscard]] std::vector<AstNode*> find(
-      const std::function<bool(AstNode*)>& f);
+      const std::function<bool(AstNode*)>& cond);
+
+  /// @brief 广度优先遍历,找到对应的点,prune是剪枝条件
+  [[nodiscard]] std::vector<AstNode*> find(
+      const std::function<bool(AstNode*)>& cond,
+      const std::function<bool(AstNode*)>& prune);
 
   /// @brief append a string representation of the node into a string buffer
   /// the string representation does not need to be JavaScript-compatible

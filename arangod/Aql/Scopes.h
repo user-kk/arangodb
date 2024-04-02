@@ -123,6 +123,9 @@ class Scopes {
   /// @brief checks whether a variable exists in any scope
   bool existsVariable(std::string_view name) const;
 
+  /// @brief checks whether a variable exists in current scope
+  bool existsVariableInCurrentScope(std::string_view name) const;
+
   /// @brief return a variable by name - this respects the current scopes
   Variable const* getVariable(std::string_view name) const;
 

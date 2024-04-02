@@ -2810,16 +2810,37 @@ template int compareAstNodes<true>(AstNode const* lhs, AstNode const* rhs,
 template int compareAstNodes<false>(AstNode const* lhs, AstNode const* rhs,
                                     bool compareUtf8);
 
-std::vector<AstNode*> AstNode::find(const std::function<bool(AstNode*)>& f) {
+std::vector<AstNode*> AstNode::find(const std::function<bool(AstNode*)>& cond) {
   std::vector<AstNode*> result;
   std::queue<AstNode*> q;
   q.push(this);
   while (!q.empty()) {
-    if (f(q.front())) {
+    if (cond(q.front())) {
       result.push_back(q.front());
     }
     for (auto member : q.front()->members) {
       q.push(member);
+    }
+    q.pop();
+  }
+
+  return result;
+};
+
+std::vector<AstNode*> AstNode::find(
+    const std::function<bool(AstNode*)>& cond,
+    const std::function<bool(AstNode*)>& prune) {
+  std::vector<AstNode*> result;
+  std::queue<AstNode*> q;
+  q.push(this);
+  while (!q.empty()) {
+    if (cond(q.front())) {
+      result.push_back(q.front());
+    }
+    for (auto member : q.front()->members) {
+      if (!prune(member)) {
+        q.push(member);
+      }
     }
     q.pop();
   }

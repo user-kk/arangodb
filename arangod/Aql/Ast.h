@@ -200,9 +200,9 @@ class Ast {
 
   /// @brief create an AST let node, without an IF condition
   AstNode* createNodeLet(char const*, size_t, AstNode const*, bool);
-  /// @brief create an AST let node, without an IF condition,并得到变量的id
+  /// @brief create an AST let node, without an IF condition,并得到变量地址vptr
   /// @warning 只能用于处理select的别名,里面进行了expression节点的深拷贝
-  AstNode* createNodeLet(std::string_view, AstNode const*, bool, size_t&);
+  AstNode* createNodeLet(std::string_view, AstNode const*, bool, Variable*&);
 
   /// @brief create an AST let node, without creating a variable
   AstNode* createNodeLet(AstNode const*, AstNode const*);
@@ -268,6 +268,11 @@ class Ast {
 
   /// @brief create an AST variable node
   AstNode* createNodeVariable(std::string_view name, bool isUserDefined);
+
+  /// @brief create an AST variable node
+  /// @warning 只能用于覆盖不是同一作用域的变量,否则会报错
+  /// @warning 用于sql的with子查询,创建同名变量覆盖掉子查询变量
+  AstNode* createNodeCoverVariable(std::string_view name, bool isUserDefined);
 
   /// @brief create an AST datasource
   /// this function will return either an AST collection or an AST view node

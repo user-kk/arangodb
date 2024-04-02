@@ -475,7 +475,9 @@ AstNode* transformOutputVariables(Parser* parser, AstNode const* names) {
 %token T_HAVING "having"
 
 
+
 /* define operator precedence */
+%left WITH_COLLECTION_LIST
 %left T_COMMA
 %left T_DISTINCT
 %right T_QUESTION T_COLON
@@ -498,6 +500,7 @@ AstNode* transformOutputVariables(Parser* parser, AstNode const* names) {
 %left INDEXED
 %left EXPANSION
 %left T_SCOPE
+%left T_STRING
 
 /* define token return types */
 %type <strval> T_STRING
@@ -598,7 +601,7 @@ optional_prune_variable:
   }
 ;
 
-with_collection:
+with_collection :
     T_STRING {
       $$ = parser->ast()->createNodeValueString($1.value, $1.length);
     }
@@ -625,28 +628,38 @@ with_collection_list:
 optional_with:
      /* empty */ {
      }
-   | T_WITH {
-      auto node = parser->ast()->createNodeArray();
-      parser->pushStack(node);
-     } with_collection_list {
+   | with_key with_collection_list %prec WITH_COLLECTION_LIST {
       auto node = static_cast<AstNode*>(parser->popStack());
       auto const& resolver = parser->query().resolver();
       auto withNode = parser->ast()->createNodeWithCollections(node, resolver);
       parser->ast()->addOperation(withNode);
      }
    ;
-
+with_key:
+    T_WITH {
+      auto node = parser->ast()->createNodeArray();
+      parser->pushStack(node);
+    }
+  ;
 queryStart:
-    optional_with query {
+    optional_with aql_statements {
+    }
+  | sql_statements{
+
     }
   ;
 
 query:
-    optional_statement_block_statements final_statement {
+    aql_statements {
     }
   | sql_statements {
     }
   ;
+
+aql_statements:
+    optional_statement_block_statements final_statement{
+
+    }
 
 final_statement:
     return_statement {
@@ -2245,6 +2258,10 @@ reference:
         $$ = parser->ast()->createNodeBoundAttributeAccess($1, $3);
       }
     }
+  | reference '.' T_TIMES{
+    $1->setFlag(FLAG_TIMES);
+    $$ = $1;
+  }
   | reference T_ARRAY_OPEN expression T_ARRAY_CLOSE %prec INDEXED {
       // indexed variable access, e.g. variable[index]
       if ($1->type == NODE_TYPE_EXPANSION) {
@@ -2455,7 +2472,9 @@ variable_name:
 /*sql*/
 
 sql_statements:
-    T_SELECT {
+    with_statements T_SELECT {
+      //开始sql
+      parser->beginSQL();
       auto node = parser->ast()->createNodeObject();
       parser->pushStack(node);
       parser->beginSelect();
@@ -2471,7 +2490,7 @@ sql_statements:
       auto node =static_cast<AstNode*>(parser->popStack());
       AstNode* retNode = nullptr;
 
-      if($3==true){//存在distinct
+      if($4==true){//存在distinct
         auto const scopeType = parser->ast()->scopes()->type();
 
         if (scopeType == AQL_SCOPE_MAIN ||
@@ -2487,8 +2506,36 @@ sql_statements:
       
       parser->ast()->addOperation(retNode); 
       parser->ast()->scopes()->endNested();
+      //结束sql
+      parser->endSQL();
     }
   ;
+
+with_statements:
+    /*empty*/{
+
+    }
+  | T_WITH  with_list {
+      
+    }
+  ;
+
+with_list:
+    with_element {
+
+    }
+  | with_element T_COMMA with_element{
+
+    }
+  ;
+
+with_element:
+    variable_name T_AS expression{
+      auto node = parser->ast()->createNodeLet($1.value, $1.length, $3, true);
+      parser->ast()->addOperation(node);
+    }
+  ;
+
 collection_pair_list:
     collection_pair {
 
@@ -2523,7 +2570,21 @@ collection_pair:
         AstNode* node = parser->ast()->createNodeFor(variable, $1, options);
         //向整个ast的_root添加member
         parser->ast()->addOperation(node);
+      }else if($1->type ==NODE_TYPE_REFERENCE) {
+        //找到引用的变量
+        Variable* expVariable = static_cast<Variable*>($1->getData());
+        
+        parser->ast()->scopes()->start(arangodb::aql::AQL_SCOPE_FOR);
+        AstNode* variableNode = parser->ast()->createNodeCoverVariable(expVariable->name, false);
+        Variable* variable = static_cast<Variable*>(variableNode->getData());
+        //创建整个Node_type_for节点
+        AstNode* options = nullptr;
+        AstNode* node = parser->ast()->createNodeFor(variable, $1, options);
+        //向整个ast的_root添加member
+        parser->ast()->addOperation(node);
+
       }else{
+        parser->kk();
         parser->registerParseError(TRI_ERROR_QUERY_PARSE, "you need an alia", yylloc.first_line, yylloc.first_column);
       }
     }
@@ -2549,15 +2610,17 @@ select_list:
 select_element:
     expression T_AS variable_name {
       parser->pushObjectElement($3.value, $3.length, $1);
-      parser->pushAliasQueue($1,std::string_view{$3.value, $3.length});
-
+      if(!$1->hasFlag(FLAG_TIMES)){//.*语法创建的不生成别名
+        parser->pushAliasQueue($1,std::string_view{$3.value, $3.length});
+      }
     }
   | expression {
-      if($1->type == NODE_TYPE_ATTRIBUTE_ACCESS){
+      if($1->type == NODE_TYPE_ATTRIBUTE_ACCESS|| $1->type == NODE_TYPE_COLLECTION){
         //TODO : 名称冲突换成临时名
         parser->pushObjectElement($1->getStringValue(), $1->getStringLength(), $1);
-        parser->pushAliasQueue($1,std::string_view{$1->getStringValue(),$1->getStringLength()});
-
+        if(!$1->hasFlag(FLAG_TIMES)){//.*语法创建的不生成别名
+          parser->pushAliasQueue($1,$1->getStringView());
+        }
       }else{
         parser->registerParseError(TRI_ERROR_QUERY_PARSE, "you need an alia", yylloc.first_line, yylloc.first_column);
 

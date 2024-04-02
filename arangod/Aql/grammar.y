@@ -521,7 +521,6 @@ AstNode* transformOutputVariables(Parser* parser, AstNode const* names) {
 %type <node> collect_optional_into;
 %type <strval> count_into;
 %type <node> expression;
-%type <node> expression_or_query;
 %type <node> distinct_expression;
 %type <node> operator_unary;
 %type <node> operator_binary;
@@ -640,12 +639,12 @@ optional_with:
 queryStart:
     optional_with query {
     }
-  | sql_statements {
-    }
   ;
 
 query:
     optional_statement_block_statements final_statement {
+    }
+  | sql_statements {
     }
   ;
 
@@ -1829,30 +1828,11 @@ optional_function_call_arguments:
     }
   ;
 
-expression_or_query:
-    expression {
-      $$ = $1;
-    }
-  | {
-      parser->ast()->scopes()->start(arangodb::aql::AQL_SCOPE_SUBQUERY);
-      parser->ast()->startSubQuery();
-    } query {
-      AstNode* node = parser->ast()->endSubQuery();
-      parser->ast()->scopes()->endCurrent();
-
-      std::string const variableName = parser->ast()->variables()->nextName();
-      auto subQuery = parser->ast()->createNodeLet(variableName.c_str(), variableName.size(), node, false);
-      parser->ast()->addOperation(subQuery);
-
-      $$ = parser->ast()->createNodeSubqueryReference(variableName, node);
-    }
-  ;
-
 function_arguments_list:
-    expression_or_query {
+    expression {
       parser->pushArrayElement($1);
     }
-  | function_arguments_list T_COMMA expression_or_query {
+  | function_arguments_list T_COMMA expression {
       parser->pushArrayElement($3);
     }
   ;

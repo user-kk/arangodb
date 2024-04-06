@@ -249,6 +249,10 @@ class Parser;
   return T_HAVING;
 }
 
+(?i:UNNEST) {
+  return T_UNNEST;
+}
+
 
  /* ---------------------------------------------------------------------------
   * predefined type literals
@@ -392,12 +396,15 @@ class Parser;
 ";" {
   return T_SEMICOLON;
 }
+"$" {
+  return T_DOLLAR;
+}
 
  /* ---------------------------------------------------------------------------
   * identifiers
   * --------------------------------------------------------------------------- */
 
-(($?|_+)[a-zA-Z]+[_a-zA-Z0-9]*) {
+(($?|_+)[a-zA-Z]+[_a-zA-Z0-9]*|@) {
   /* unquoted string */
   yylval->strval.value = yyextra->ast()->resources().registerString(yytext, yyleng);
   yylval->strval.length = yyleng;

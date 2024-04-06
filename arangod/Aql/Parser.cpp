@@ -257,9 +257,7 @@ void Parser::executeSelectPend() {
     if (variable == nullptr) {
       // variable does not exist
       // now try special variables
-      if (_ast.scopes()->canUseCurrentVariable() &&
-          (variableName == Variable::NAME_CURRENT ||
-           variableName == Variable::NAME_CURRENT.substr(1))) {
+      if (this->checkVariableNameIsCurrent(variableName)) {
         variable = _ast.scopes()->getCurrentVariable();
       }
     }
@@ -345,9 +343,7 @@ void arangodb::aql::Parser::executeSelectPendWithoutPop() {
     if (variable == nullptr) {
       // variable does not exist
       // now try special variables
-      if (_ast.scopes()->canUseCurrentVariable() &&
-          (variableName == Variable::NAME_CURRENT ||
-           variableName == Variable::NAME_CURRENT.substr(1))) {
+      if (this->checkVariableNameIsCurrent(variableName)) {
         variable = _ast.scopes()->getCurrentVariable();
       }
     }
@@ -486,9 +482,7 @@ void arangodb::aql::Parser::executeHavingPend() {
     if (variable == nullptr) {
       // variable does not exist
       // now try special variables
-      if (_ast.scopes()->canUseCurrentVariable() &&
-          (variableName == Variable::NAME_CURRENT ||
-           variableName == Variable::NAME_CURRENT.substr(1))) {
+      if (this->checkVariableNameIsCurrent(variableName)) {
         variable = _ast.scopes()->getCurrentVariable();
       }
     }
@@ -520,4 +514,48 @@ void arangodb::aql::Parser::executeHavingPend() {
 void arangodb::aql::Parser::kk() {
   TRI_ASSERT(!_sqlContext.empty());
   return;
+};
+void arangodb::aql::Parser::produceSelectSubQuery() {
+  auto& ctx = sqlContext();
+  for (auto node : ctx._selectSubQueryQueue) {
+    _ast.addOperation(node);
+  }
+  ctx._selectSubQueryQueue.clear();
+};
+void arangodb::aql::Parser::executeSelectSubQueryPend() {
+  AstNode* pendingNode = nullptr;
+  SQLContext& ctx = sqlContext();
+  while (!ctx._selectSubQueryPendingQueue.empty()) {
+    pendingNode = ctx._selectSubQueryPendingQueue.front().first;
+
+    std::string_view variableName =
+        ctx._selectSubQueryPendingQueue.front().second;
+    auto variable = _ast.scopes()->getVariable(variableName, true);
+
+    if (variable == nullptr) {
+      // variable does not exist
+      // now try special variables
+      if (this->checkVariableNameIsCurrent(variableName)) {
+        variable = _ast.scopes()->getCurrentVariable();
+      }
+    }
+    AstNode* node = nullptr;
+    if (variable != nullptr) {
+      // variable alias exists, now use it
+      node = _ast.createNodeReference(variable);
+    }
+
+    if (node == nullptr) {  // 为collection时
+      // variable not found. so it must have been a collection or view
+      auto const& resolver = this->query().resolver();
+      node = _ast.createNodeDataSource(resolver, variableName,
+                                       arangodb::AccessMode::Type::READ, true,
+                                       false);
+    }
+
+    TRI_ASSERT(node != nullptr);
+
+    *pendingNode = *node;
+    ctx._selectSubQueryPendingQueue.pop_front();
+  }
 };

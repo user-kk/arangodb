@@ -473,6 +473,8 @@ AstNode* transformOutputVariables(Parser* parser, AstNode const* names) {
 %token T_ORDER "order"
 %token T_BY "by"
 %token T_HAVING "having"
+%token T_UNNEST "unnest"
+%token T_DOLLAR "$"
 
 
 
@@ -2171,8 +2173,7 @@ reference:
       if (variable == nullptr) {
         // variable does not exist
         // now try special variables
-        if (ast->scopes()->canUseCurrentVariable() && 
-            (variableName == Variable::NAME_CURRENT || variableName == Variable::NAME_CURRENT.substr(1))) {
+        if (parser->checkVariableNameIsCurrent(variableName)) {
           variable = ast->scopes()->getCurrentVariable();
         }
       }
@@ -2185,7 +2186,10 @@ reference:
       if (node == nullptr) {//为collection时
         // variable not found. so it must have been a collection or view
         auto const& resolver = parser->query().resolver();
-        node = ast->createNodeDataSource(resolver, variableName, arangodb::AccessMode::Type::READ, true, false,parser->isSelect()||parser->isHaving());
+        node = ast->createNodeDataSource(resolver, variableName, arangodb::AccessMode::Type::READ, true, false,parser->isSelect()||parser->isHaving()||(parser->isSelectSubQuery()&&parser->isWhere()));
+        if(parser->isSelectSubQuery()){
+          parser->pushSelectSubQueryPending(node,std::string_view{$1.value, $1.length});
+        }
       }
       TRI_ASSERT(node != nullptr);
 
@@ -2226,8 +2230,11 @@ reference:
 
       std::string const variableName = parser->ast()->variables()->nextName();
       auto subQuery = parser->ast()->createNodeLet(variableName.c_str(), variableName.size(), node, false);
-      parser->ast()->addOperation(subQuery);
-
+      if(parser->isSelect()){
+        parser->pushSelectSubQueryQueue(subQuery);
+      }else{
+        parser->ast()->addOperation(subQuery);
+      }
       $$ = parser->ast()->createNodeSubqueryReference(variableName, node);
     }
   | reference '.' T_STRING %prec REFERENCE {
@@ -2484,11 +2491,20 @@ sql_statements:
       parser->produceAlias();
     } where_statements group_by_statements order_by_statements limit_statements{
       
+      //如果select中有嵌套子查询,执行判定,产生子查询的let节点
+      parser->executeSelectSubQueryPend();
+      parser->produceSelectSubQuery();
       //设置return节点,
       parser->executeSelectPend();
 
       auto node =static_cast<AstNode*>(parser->popStack());
       AstNode* retNode = nullptr;
+
+      TRI_ASSERT(node->type == NODE_TYPE_OBJECT);
+
+      if(node->numMembers()==1){//不return对象,直接return对象中的一个内容
+        node = node->getMemberUnchecked(0)->getMemberUnchecked(0);
+      }
 
       if($4==true){//存在distinct
         auto const scopeType = parser->ast()->scopes()->type();
@@ -2558,6 +2574,8 @@ collection_pair:
       AstNode* node = parser->ast()->createNodeFor(variable, $1, options);
       //向整个ast的_root添加member
       parser->ast()->addOperation(node);
+    } unnest_statement {
+
     }
   | expression {
       if($1->isValueType(arangodb::aql::AstNodeValueType::VALUE_TYPE_STRING)){
@@ -2575,6 +2593,7 @@ collection_pair:
         Variable* expVariable = static_cast<Variable*>($1->getData());
         
         parser->ast()->scopes()->start(arangodb::aql::AQL_SCOPE_FOR);
+        //覆盖掉原有的变量
         AstNode* variableNode = parser->ast()->createNodeCoverVariable(expVariable->name, false);
         Variable* variable = static_cast<Variable*>(variableNode->getData());
         //创建整个Node_type_for节点
@@ -2587,7 +2606,40 @@ collection_pair:
         parser->kk();
         parser->registerParseError(TRI_ERROR_QUERY_PARSE, "you need an alia", yylloc.first_line, yylloc.first_column);
       }
+    } | unnest_statement {
+
     }
+  ;
+unnest_statement:
+    /*empty*/{
+
+    }
+  |  T_UNNEST expression_list{
+
+    }
+  ;
+expression_list:
+    expression_element {
+
+    }
+  | expression_list T_MINUS T_GT  expression_element {
+
+    }
+  ;
+expression_element:
+    expression T_AS variable_name{
+      //得到变量名
+      parser->ast()->scopes()->start(arangodb::aql::AQL_SCOPE_FOR);
+      AstNode* variableNameNode = parser->ast()->createNodeValueString($3.value, $3.length);
+      //现在创建了一个变量节点(同时也创建一个变量)
+      AstNode* variableNode = parser->ast()->createNodeVariable(variableNameNode->getStringView(), true);
+      Variable* variable = static_cast<Variable*>(variableNode->getData());
+      //创建整个Node_type_for节点
+      AstNode* options = nullptr;
+      AstNode* node = parser->ast()->createNodeFor(variable, $1, options);
+      //向整个ast的_root添加member
+      parser->ast()->addOperation(node);
+  }
   ;
 
 distinct_label:
@@ -2609,6 +2661,10 @@ select_list:
   ;
 select_element:
     expression T_AS variable_name {
+      if(parser->usedNULLAlia()){
+        parser->registerParseError(TRI_ERROR_QUERY_PARSE, "The previous one requires an alias", yylloc.first_line, yylloc.first_column);
+      }
+      parser->disableNULLAlia();
       parser->pushObjectElement($3.value, $3.length, $1);
       if(!$1->hasFlag(FLAG_TIMES)){//.*语法创建的不生成别名
         parser->pushAliasQueue($1,std::string_view{$3.value, $3.length});
@@ -2616,23 +2672,34 @@ select_element:
     }
   | expression {
       if($1->type == NODE_TYPE_ATTRIBUTE_ACCESS|| $1->type == NODE_TYPE_COLLECTION){
+        if(parser->usedNULLAlia()){
+          parser->registerParseError(TRI_ERROR_QUERY_PARSE, "The previous one requires an alias", yylloc.first_line, yylloc.first_column);
+        }
+        parser->disableNULLAlia();
         //TODO : 名称冲突换成临时名
         parser->pushObjectElement($1->getStringValue(), $1->getStringLength(), $1);
         if(!$1->hasFlag(FLAG_TIMES)){//.*语法创建的不生成别名
           parser->pushAliasQueue($1,$1->getStringView());
         }
       }else{
-        parser->registerParseError(TRI_ERROR_QUERY_PARSE, "you need an alia", yylloc.first_line, yylloc.first_column);
-
+        if(parser->allowNULLAlia()){
+          //如果select子句中只有一个元素,可以接受没有别名,随便注册一个别名(这个名称不会被使用)
+          const char* name= parser->ast()->resources().registerString("_",1);
+          parser->pushObjectElement(name, 1, $1);
+          parser->useNULLAlia();
+          parser->disableNULLAlia();
+        }else{
+          parser->registerParseError(TRI_ERROR_QUERY_PARSE, "you need an alias", yylloc.first_line, yylloc.first_column); 
+        }
       }
     }
   ;
 where_statements:
     /* empty */ {
     }
-  | T_WHERE expression {
+  | T_WHERE {parser->beginWhere();} expression {parser->endWhere();} {
       // operand is a reference. can use it directly
-      auto node = parser->ast()->createNodeFilter($2);
+      auto node = parser->ast()->createNodeFilter($3);
       parser->ast()->addOperation(node);
     }
   ;

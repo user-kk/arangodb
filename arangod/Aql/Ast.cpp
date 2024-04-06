@@ -4472,3 +4472,15 @@ arangodb::aql::AstNode* arangodb::aql::Ast::createNodeCoverVariable(
 
   return node;
 };
+arangodb::aql::AstNode* arangodb::aql::Ast::createNodeLet(
+    std::string_view variableName, AstNode const* expression,
+    bool isUserDefinedVariable) {
+  AstNode* node = createNode(NODE_TYPE_LET);
+  node->reserve(2);
+
+  AstNode* variable = createNodeVariable(variableName, isUserDefinedVariable);
+  node->addMember(variable);
+  node->addMember(expression);
+
+  return node;
+};

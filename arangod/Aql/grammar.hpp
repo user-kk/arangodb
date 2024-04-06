@@ -134,14 +134,16 @@ extern int Aqldebug;
     T_ORDER = 334,                 /* "order"  */
     T_BY = 335,                    /* "by"  */
     T_HAVING = 336,                /* "having"  */
-    WITH_COLLECTION_LIST = 337,    /* WITH_COLLECTION_LIST  */
-    UMINUS = 338,                  /* UMINUS  */
-    UPLUS = 339,                   /* UPLUS  */
-    UNEGATION = 340,               /* UNEGATION  */
-    FUNCCALL = 341,                /* FUNCCALL  */
-    REFERENCE = 342,               /* REFERENCE  */
-    INDEXED = 343,                 /* INDEXED  */
-    EXPANSION = 344                /* EXPANSION  */
+    T_UNNEST = 337,                /* "unnest"  */
+    T_DOLLAR = 338,                /* "$"  */
+    WITH_COLLECTION_LIST = 339,    /* WITH_COLLECTION_LIST  */
+    UMINUS = 340,                  /* UMINUS  */
+    UPLUS = 341,                   /* UPLUS  */
+    UNEGATION = 342,               /* UNEGATION  */
+    FUNCCALL = 343,                /* FUNCCALL  */
+    REFERENCE = 344,               /* REFERENCE  */
+    INDEXED = 345,                 /* INDEXED  */
+    EXPANSION = 346                /* EXPANSION  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -160,7 +162,7 @@ union YYSTYPE
   bool                     boolval;
   int64_t                  intval;
 
-#line 163 "grammar.hpp"
+#line 165 "grammar.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;

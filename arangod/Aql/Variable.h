@@ -53,6 +53,9 @@ struct Variable {
   /// @brief name of $CURRENT variable
   static constexpr std::string_view NAME_CURRENT = "$CURRENT";
 
+  /// @brief alias of $CURRENT variable
+  static constexpr std::string_view NAME_CURRENT_Alias = "@";
+
   /// @brief indicates the type of the variable
   enum class Type {
     /// @brief a regular variable with a value determined while executing the

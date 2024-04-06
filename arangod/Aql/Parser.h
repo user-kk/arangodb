@@ -25,7 +25,6 @@
 
 #include <cstddef>
 #include <deque>
-#include <stack>
 #include <string_view>
 #include <unordered_map>
 #include "Aql/Ast.h"
@@ -143,9 +142,13 @@ class Parser {
   /// @brief peek at a temporary value from the parser's stack
   void* peekStack();
 
-  void beginSQL() { _sqlContext.push({}); }
+  void beginSQL() {
+    bool isSelectSubQuery = isSelect();
+    _sqlContext.push_back({});
+    sqlContext()._isSelectSubQuery = isSelectSubQuery;
+  }
 
-  void endSQL() { _sqlContext.pop(); }
+  void endSQL() { _sqlContext.pop_back(); }
 
   void beginSelect() { sqlContext()._isSelect = true; }
 
@@ -153,6 +156,9 @@ class Parser {
     sqlContext()._isSelect = false;
     sqlContext()._willReturnNode = static_cast<AstNode*>(this->peekStack());
   }
+
+  void beginWhere() { sqlContext()._isWhere = true; }
+  void endWhere() { sqlContext()._isWhere = false; }
 
   void beginHaving() { sqlContext()._having = true; }
 
@@ -173,7 +179,19 @@ class Parser {
     }
     return sqlContext()._having;
   }
+  bool isSelectSubQuery() {
+    if (_sqlContext.empty()) {
+      return false;
+    }
+    return sqlContext()._isSelectSubQuery;
+  }
 
+  bool isWhere() {
+    if (_sqlContext.empty()) {
+      return false;
+    }
+    return sqlContext()._isWhere;
+  }
   void pushSelectPending(AstNode* p, std::string_view s) {
     sqlContext()._selectPendingQueue.push_back({p, s});
   }
@@ -186,15 +204,32 @@ class Parser {
     sqlContext()._selectAliasQueue.push_back({p, s});
   }
 
+  void pushSelectSubQueryQueue(AstNode* p) {
+    sqlContext()._selectSubQueryQueue.push_back(p);
+  }
+
+  void pushSelectSubQueryPending(AstNode* p, std::string_view s) {
+    TRI_ASSERT(_sqlContext.size() >= 2);
+    _sqlContext[_sqlContext.size() - 2]._selectSubQueryPendingQueue.push_back(
+        {p, s});
+  }
+
   /// @brief 将待判定的节点变成collection节点或variableRef节点
   /// @warning 这个会清空判定队列和select_map
   void executeSelectPend();
+
+  /// @brief 将待判定的节点变成collection节点或variableRef节点
+  /// @warning 这个会清空判定队列
+  void executeSelectSubQueryPend();
 
   /// @brief 将待判定的节点变成collection节点或variableRef节点
   void executeSelectPendWithoutPop();
 
   /// @brief 生成别名的let节点
   void produceAlias();
+
+  /// @brief 生成select中的嵌套子查询
+  void produceSelectSubQuery();
 
   /// @brief 替换掉return节点的被group_by的变量
   /// @param  assignNode group_by产生的赋值节点
@@ -206,6 +241,25 @@ class Parser {
   /// @warning 这个会清空判定队列
   void executeHavingPend();
 
+  void disableNULLAlia() { sqlContext()._allowNULLAlia = false; }
+
+  bool allowNULLAlia() { return sqlContext()._allowNULLAlia; }
+
+  void useNULLAlia() { sqlContext()._usedNULLAlia = true; }
+
+  bool usedNULLAlia() { return sqlContext()._usedNULLAlia; }
+
+  bool checkVariableNameIsCurrent(std::string_view variableName) {
+    if (_ast.scopes()->canUseCurrentVariable() &&
+        (variableName == Variable::NAME_CURRENT ||
+         variableName == Variable::NAME_CURRENT.substr(1) ||
+         variableName == Variable::NAME_CURRENT_Alias)) {
+      return true;
+    } else {
+      return false;
+    }
+  }
+
   void kk();
 
  private:
@@ -213,7 +267,7 @@ class Parser {
 
   [[nodiscard]] SQLContext& sqlContext() {
     TRI_ASSERT(!_sqlContext.empty());
-    return _sqlContext.top();
+    return _sqlContext.back();
   }
 
  private:
@@ -258,19 +312,28 @@ class Parser {
 
     bool _isSelect = false;
     bool _having = false;
+    bool _isSelectSubQuery = false;  // 是否是select中嵌套的子查询
+    bool _isWhere = false;
+    bool _allowNULLAlia = true;  // select是否允许空别名
+    bool _usedNULLAlia = false;  // 空别名是否被使用
     ///@brief 用于替换select子句中的表达式
     std::deque<std::pair<AstNode*, std::string_view>> _selectPendingQueue;
     ///@brief 用于替换having子句中的表达式
     std::deque<std::pair<AstNode*, std::string_view>> _havingPendingQueue;
+    ///@brief 用于替换select子句子查询中的表达式
+    std::deque<std::pair<AstNode*, std::string_view>>
+        _selectSubQueryPendingQueue;
     ///@brief 记录当前返回的节点
     AstNode* _willReturnNode = nullptr;
     ///@brief 记录当前having表达式的节点
     AstNode* _havingExprssionNode = nullptr;
     ///@brief 用于生成let子句(处理select子句中的别名)
     std::deque<std::pair<AstNode*, std::string_view>> _selectAliasQueue;
+    ///@brief 用于生成select子查询中的let子句(延迟生成select子句中的子查询)
+    std::deque<AstNode*> _selectSubQueryQueue;
   };
 
-  std::stack<SQLContext> _sqlContext;
+  std::deque<SQLContext> _sqlContext;
 };
 }  // namespace aql
 }  // namespace arangodb

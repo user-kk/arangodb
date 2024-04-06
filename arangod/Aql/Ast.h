@@ -200,6 +200,9 @@ class Ast {
 
   /// @brief create an AST let node, without an IF condition
   AstNode* createNodeLet(char const*, size_t, AstNode const*, bool);
+  /// @brief create an AST let node, without an IF condition
+  AstNode* createNodeLet(std::string_view, AstNode const*, bool);
+
   /// @brief create an AST let node, without an IF condition,并得到变量地址vptr
   /// @warning 只能用于处理select的别名,里面进行了expression节点的深拷贝
   AstNode* createNodeLet(std::string_view, AstNode const*, bool, Variable*&);
@@ -455,8 +458,6 @@ class Ast {
 
   /// @brief create an AST n-ary operator
   AstNode* createNodeNaryOperator(AstNodeType, AstNode const*);
-
-  AstNode* createNodeNeedPend(std::string_view value);
 
   /// @brief injects bind parameters into the AST
   void injectBindParameters(BindParameters& parameters,

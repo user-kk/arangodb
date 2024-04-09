@@ -194,6 +194,35 @@ struct AggregatorMin final : public Aggregator {
   AqlValue value;
 };
 
+struct AggregatorMinWith final : public Aggregator {
+  explicit AggregatorMinWith(velocypack::Options const* opts)
+      : Aggregator(opts), value() {}
+
+  ~AggregatorMinWith() { value.destroy(); }
+
+  void reset() override { value.erase(); }
+
+  void reduce(AqlValue const& cmpValue) override {
+    if (!cmpValue.isNull(true) &&
+        (value.isEmpty() ||
+         AqlValue::Compare(_vpackOptions, value, cmpValue, true) > 0)) {
+      // the value `null` itself will not be used in MIN() to compare lower than
+      // e.g. value `false`
+      value.destroy();
+      value = cmpValue.clone();
+    }
+  }
+
+  AqlValue get() const override {
+    if (value.isEmpty()) {
+      return AqlValue(AqlValueHintNull());
+    }
+    return value.clone();
+  }
+
+  AqlValue value;
+};
+
 struct AggregatorMax final : public Aggregator {
   explicit AggregatorMax(velocypack::Options const* opts)
       : Aggregator(opts), value() {}
@@ -942,6 +971,9 @@ std::unordered_map<std::string_view, AggregatorInfo> const aggregators = {
     {"MIN",
      {std::make_shared<GenericFactory<AggregatorMin>>(), doesRequireInput,
       official, "MIN", "MIN"}},  // min is commutative
+    {"MIN_WITH",
+     {std::make_shared<GenericFactory<AggregatorMinWith>>(), doesRequireInput,
+      official, "MIN_WITH", "MIN_WITH"}},  // min is commutative
     {"MAX",
      {std::make_shared<GenericFactory<AggregatorMax>>(), doesRequireInput,
       official, "MAX", "MAX"}},  // max is commutative

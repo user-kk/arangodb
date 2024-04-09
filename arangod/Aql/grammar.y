@@ -2485,7 +2485,7 @@ sql_statements:
       auto node = parser->ast()->createNodeObject();
       parser->pushStack(node);
       parser->beginSelect();
-    } distinct_label select_list {parser->endSelect(); } T_FROM collection_pair_list {
+    } distinct_label select_list {parser->endSelect(); } from_statements {
       //设置let节点
       parser->executeSelectPendWithoutPop();
       parser->produceAlias();
@@ -2551,6 +2551,14 @@ with_element:
       parser->ast()->addOperation(node);
     }
   ;
+from_statements:
+    /* empty */{
+
+    }
+  | T_FROM collection_pair_list {
+
+  }
+;
 
 collection_pair_list:
     collection_pair {

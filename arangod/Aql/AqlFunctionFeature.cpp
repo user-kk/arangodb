@@ -26,6 +26,7 @@
 #include "ApplicationFeatures/ApplicationServer.h"
 #include "Aql/AstNode.h"
 #include "Aql/Function.h"
+#include "Aql/Functions.h"
 #include "Basics/StringUtils.h"
 #include "Cluster/ServerState.h"
 #include "FeaturePhases/ClusterFeaturePhase.h"
@@ -314,12 +315,23 @@ void AqlFunctionFeature::addListFunctions() {
   add({"LENGTH", ".", flags, &functions::Length});
   // COUNT is an alias for LENGTH
   addAlias("COUNT", "LENGTH");
+  addAlias("ARRAY_LENGTH", "LENGTH");
   add({"MIN", ".", flags, &functions::Min});
+  addAlias("ARRAY_MIN", "MIN");
+  add({"MIN_WITH", ".,.", flags, &functions::MinWith});
+  addAlias("ARRAY_MIN_WITH", "MIN_WITH");
   add({"MAX", ".", flags, &functions::Max});
+  addAlias("ARRAY_MAX", "MAX");
+  add({"MAX_WITH", ".,.", flags, &functions::MaxWith});
+  addAlias("ARRAY_MAX_WITH", "MAX_WITH");
   add({"SUM", ".", flags, &functions::Sum});
+  addAlias("ARRAY_SUM", "SUM");
   add({"MEDIAN", ".", flags, &functions::Median});
+  addAlias("ARRAY_MEDIAN", "MEDIAN");
   add({"PERCENTILE", ".,.|.", flags, &functions::Percentile});
+  addAlias("ARRAY_PERCENTILE", "PERCENTILE");
   add({"AVERAGE", ".", flags, &functions::Average});
+  addAlias("ARRAY_AVERAGE", "AVERAGE");
   // AVG is an alias for AVERAGE
   addAlias("AVG", "AVERAGE");
   add({"VARIANCE_SAMPLE", ".", flags, &functions::VarianceSample});

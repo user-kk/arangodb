@@ -272,7 +272,7 @@ void Parser::executeSelectPend() {
       auto const& resolver = this->query().resolver();
       node = _ast.createNodeDataSource(resolver, variableName,
                                        arangodb::AccessMode::Type::READ, true,
-                                       false);
+                                       false, true);
     }
 
     TRI_ASSERT(node != nullptr);

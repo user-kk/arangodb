@@ -268,12 +268,12 @@ auto HashedCollectExecutor::produceRows(AqlItemBlockInputRange& inputRange,
   TRI_IF_FAILURE("HashedCollectExecutor::produceRows") {
     THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
   }
-  if (!_isInitialized) {
+  if (!_isInitialized) {  // 构建hash表并聚集
     // Consume the input range
     _isInitialized = consumeInputRange(inputRange);
   }
 
-  if (_isInitialized) {
+  if (_isInitialized) {  // 将聚集的结果写入输出
     while (_currentGroup != _allGroups.end() && !output.isFull()) {
       writeCurrentGroupToOutput(output);
       ++_currentGroup;

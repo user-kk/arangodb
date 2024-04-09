@@ -216,6 +216,7 @@ class Parser {
 
   /// @brief 将待判定的节点变成collection节点或variableRef节点
   /// @warning 这个会清空判定队列和select_map
+  /// @warning 这个不会向ast的collection中添加新的表
   void executeSelectPend();
 
   /// @brief 将待判定的节点变成collection节点或variableRef节点

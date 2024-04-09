@@ -2424,6 +2424,7 @@ size_t Ast::extractParallelism(AstNode const* optionsNode) {
 /// this does not only optimize but also performs a few validations after
 /// bind parameter injection. merging this pass with the regular AST
 /// optimizations saves one extra pass over the AST
+/// 执行深度优先遍历，在看到节点前，碰到节点，看到节点后，分别执行相应动作
 void Ast::validateAndOptimize(transaction::Methods& trx,
                               Ast::ValidateAndOptimizeOptions const& options) {
   ::ValidateAndOptimizeContext context(trx);

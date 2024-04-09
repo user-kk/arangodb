@@ -297,8 +297,12 @@ AqlValue Value(arangodb::aql::ExpressionContext*, AstNode const&,
                VPackFunctionParametersView);
 AqlValue Min(arangodb::aql::ExpressionContext*, AstNode const&,
              VPackFunctionParametersView);
+AqlValue MinWith(arangodb::aql::ExpressionContext*, AstNode const&,
+                 VPackFunctionParametersView);
 AqlValue Max(arangodb::aql::ExpressionContext*, AstNode const&,
              VPackFunctionParametersView);
+AqlValue MaxWith(arangodb::aql::ExpressionContext*, AstNode const&,
+                 VPackFunctionParametersView);
 AqlValue Sum(arangodb::aql::ExpressionContext*, AstNode const&,
              VPackFunctionParametersView);
 AqlValue Average(arangodb::aql::ExpressionContext*, AstNode const&,

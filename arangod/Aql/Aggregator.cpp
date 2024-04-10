@@ -197,32 +197,124 @@ struct AggregatorMin final : public Aggregator {
 
 struct AggregatorMinWith final : public Aggregator {
   explicit AggregatorMinWith(velocypack::Options const* opts)
-      : Aggregator(opts), value() {}
+      : Aggregator(opts), minValue() {}
 
-  ~AggregatorMinWith() { value.destroy(); }
+  ~AggregatorMinWith() {
+    minValue.destroy();
+    destoryMinWithValue();
+  }
 
-  void reset() override { value.erase(); }
+  void reset() override {
+    minValue.erase();
+    destoryMinWithValue();
+  }
 
   void reduce(VPackFunctionParametersView parameters) override {
     AqlValue const& cmpValue = extractFunctionParameterValue(parameters, 0);
-    if (!cmpValue.isNull(true) &&
-        (value.isEmpty() ||
-         AqlValue::Compare(_vpackOptions, value, cmpValue, true) > 0)) {
-      // the value `null` itself will not be used in MIN() to compare lower than
-      // e.g. value `false`
-      value.destroy();
-      value = cmpValue.clone();
+    AqlValue const& withValue = extractFunctionParameterValue(parameters, 1);
+    if (cmpValue.isNull(true)) {
+      return;
+    }
+    if (minValue.isEmpty()) {
+      minValue.destroy();
+      minValue = cmpValue.clone();
+      destoryMinWithValue();
+      minWithValue.push_back(withValue.clone());
+    } else {
+      int ret = AqlValue::Compare(_vpackOptions, minValue, cmpValue, true);
+      if (ret > 0) {
+        minValue.destroy();
+        minValue = cmpValue.clone();
+        destoryMinWithValue();
+        minWithValue.push_back(withValue.clone());
+      } else if (ret == 0) {
+        minWithValue.push_back(withValue.clone());
+      }
     }
   }
 
   AqlValue get() const override {
-    if (value.isEmpty()) {
+    if (minWithValue.empty()) {
       return AqlValue(AqlValueHintNull());
     }
-    return value.clone();
+    VPackBuilder builder;
+    builder.openArray();
+    for (auto& i : minWithValue) {
+      i.toVelocyPack(nullptr, builder, true);
+    }
+    builder.close();
+    return AqlValue(builder.slice(), builder.size());
   }
 
-  AqlValue value;
+  AqlValue minValue;
+  std::vector<AqlValue> minWithValue;
+  void destoryMinWithValue() {
+    for (auto& i : minWithValue) {
+      i.destroy();
+    }
+    minWithValue.clear();
+  }
+};
+
+struct AggregatorMaxWith final : public Aggregator {
+  explicit AggregatorMaxWith(velocypack::Options const* opts)
+      : Aggregator(opts), maxValue() {}
+
+  ~AggregatorMaxWith() {
+    maxValue.destroy();
+    destoryMinWithValue();
+  }
+
+  void reset() override {
+    maxValue.erase();
+    destoryMinWithValue();
+  }
+
+  void reduce(VPackFunctionParametersView parameters) override {
+    AqlValue const& cmpValue = extractFunctionParameterValue(parameters, 0);
+    AqlValue const& withValue = extractFunctionParameterValue(parameters, 1);
+    if (cmpValue.isNull(true)) {
+      return;
+    }
+    if (maxValue.isEmpty()) {
+      maxValue.destroy();
+      maxValue = cmpValue.clone();
+      destoryMinWithValue();
+      maxWithValue.push_back(withValue.clone());
+    } else {
+      int ret = AqlValue::Compare(_vpackOptions, maxValue, cmpValue, true);
+      if (ret < 0) {
+        maxValue.destroy();
+        maxValue = cmpValue.clone();
+        destoryMinWithValue();
+        maxWithValue.push_back(withValue.clone());
+      } else if (ret == 0) {
+        maxWithValue.push_back(withValue.clone());
+      }
+    }
+  }
+
+  AqlValue get() const override {
+    if (maxWithValue.empty()) {
+      return AqlValue(AqlValueHintNull());
+    }
+    VPackBuilder builder;
+    builder.openArray();
+    for (auto& i : maxWithValue) {
+      i.toVelocyPack(nullptr, builder, true);
+    }
+    builder.close();
+    return AqlValue(builder.slice(), builder.size());
+  }
+
+  AqlValue maxValue;
+  std::vector<AqlValue> maxWithValue;
+  void destoryMinWithValue() {
+    for (auto& i : maxWithValue) {
+      i.destroy();
+    }
+    maxWithValue.clear();
+  }
 };
 
 struct AggregatorMax final : public Aggregator {
@@ -992,6 +1084,9 @@ std::unordered_map<std::string_view, AggregatorInfo> const aggregators = {
     {"MAX",
      {std::make_shared<GenericFactory<AggregatorMax>>(), doesRequireInput,
       official, "MAX", "MAX"}},  // max is commutative
+    {"MAX_WITH",
+     {std::make_shared<GenericFactory<AggregatorMaxWith>>(), doesRequireInput,
+      official, "MAX_WITH", "MAX_WITH"}},  // max is commutative
     {"SUM",
      {std::make_shared<GenericFactory<AggregatorSum>>(), doesRequireInput,
       official, "SUM", "SUM"}},  // sum is commutative

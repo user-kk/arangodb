@@ -64,6 +64,8 @@
 
 #include <absl/strings/str_cat.h>
 #include <velocypack/Iterator.h>
+#include <cstddef>
+#include <vector>
 
 using namespace arangodb;
 using namespace arangodb::aql;
@@ -2846,22 +2848,34 @@ std::vector<AggregateVarInfo> ExecutionPlan::prepareAggregateVars(
     // validated before)
     TRI_ASSERT(args->type == NODE_TYPE_ARRAY);
     std::string_view functionName = Aggregator::translateAlias(func->name);
-    Variable const* variable = nullptr;
+    std::vector<Variable const*> variables;
     if (args->numMembers() == 1) {
       auto arg = args->getMember(0);
       if (arg->type == NODE_TYPE_REFERENCE) {
         // operand is a variable
-        variable = static_cast<Variable*>(arg->getData());
+        variables.push_back(static_cast<Variable*>(arg->getData()));
       } else {
         auto calc = createTemporaryCalculation(arg, *previous);
         *previous = calc;
-        variable = getOutVariable(calc);
+        variables.push_back(getOutVariable(calc));
       }
-    } else {
+    } else if (args->numMembers() == 0) {
       TRI_ASSERT(!Aggregator::requiresInput(func->name));
+    } else {  // 有多个参数
+      for (size_t i = 0; i < args->numMembers(); i++) {
+        auto arg = args->getMember(i);
+        if (arg->type == NODE_TYPE_REFERENCE) {
+          // operand is a variable
+          variables.push_back(static_cast<Variable*>(arg->getData()));
+        } else {
+          auto calc = createTemporaryCalculation(arg, *previous);
+          *previous = calc;
+          variables.push_back(getOutVariable(calc));
+        }
+      }
     }
-    aggregateVariables.emplace_back(
-        AggregateVarInfo{outVar, {variable}, std::string(functionName)});
+    aggregateVariables.emplace_back(AggregateVarInfo{
+        outVar, std::move(variables), std::string(functionName)});
   }
 
   return aggregateVariables;

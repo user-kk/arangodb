@@ -265,10 +265,10 @@ function printRules(rules, stats) {
       for (let j = 0; j < cols; ++j) {
         const idx = i + j * off;
         if (idx < rules.length) {
-          parts.push(pad(1 + maxIdLen - String(idx + 1).length) + variable(String(idx + 1)) + '   ' + keyword(rules[idx]) + pad(1 + maxRuleLen - rules[idx].length)); 
+          parts.push(pad(1 + maxIdLen - String(idx + 1).length) + variable(String(idx + 1)) + '   ' + keyword(rules[idx]) + pad(1 + maxRuleLen - rules[idx].length));
         }
       }
-    
+
       stringBuilder.appendLine(' ' + parts.join('         '));
     }
   }
@@ -279,14 +279,14 @@ function printRules(rules, stats) {
   }
 
   let maxNameLength = 0;
-  let times = Object.keys(stats.rules).map(function(key) {
+  let times = Object.keys(stats.rules).map(function (key) {
     maxNameLength = Math.max(maxNameLength, key.length);
     return { name: key, time: stats.rules[key] };
   });
   // filter out everything that was reasonably fast
   times = times.filter((item) => item.time >= 0.0002);
 
-  times.sort(function(l, r) {
+  times.sort(function (l, r) {
     // highest cost first
     return r.time - l.time;
   });
@@ -296,7 +296,7 @@ function printRules(rules, stats) {
   if (times.length > 0) {
     stringBuilder.appendLine(section('Optimization rules with highest execution times:'));
     stringBuilder.appendLine(' ' + header('RuleName') + '   ' + pad(maxNameLength - 'RuleName'.length) + header('Duration [s]'));
-    times.forEach(function(rule) {
+    times.forEach(function (rule) {
       stringBuilder.appendLine(' ' + keyword(rule.name) + '   ' + pad(12 + maxNameLength - rule.name.length - rule.time.toFixed(5).length) + value(rule.time.toFixed(5)));
     });
 
@@ -400,7 +400,7 @@ function printProfile(profile) {
         parts.push(keyword(key) + pad(1 + maxHeadLen - String(key).length) + '    ' + pad(1 + maxDurLen - profile[key].toFixed(5).length) + value(profile[key].toFixed(5)));
       }
     }
-    
+
     stringBuilder.appendLine(' ' + parts.join('         '));
   }
   stringBuilder.appendLine();
@@ -880,7 +880,7 @@ function processQuery(query, explain, planIndex) {
 
   recursiveWalk(plan.nodes, 0, 'COOR');
 
-  if (profileMode) { 
+  if (profileMode) {
     // merge runtime info into plan.
     // note that this is only necessary for server versions <= 3.11.
     // the code can be removed when only supporting server versions
@@ -978,7 +978,7 @@ function processQuery(query, explain, planIndex) {
         node.subNodes.push({
           type: 'object element',
           name: k,
-          subNodes: [ unfoldRawData(value[k]) ]
+          subNodes: [unfoldRawData(value[k])]
         });
       });
     } else {
@@ -1208,7 +1208,7 @@ function processQuery(query, explain, planIndex) {
 
   const projections = function (value, attributeName, label) {
     if (value && value.hasOwnProperty(attributeName) && value[attributeName].length > 0) {
-      let fields = value[attributeName].map(function(p) {
+      let fields = value[attributeName].map(function (p) {
         if (Array.isArray(p)) {
           return '`' + p.join('`.`') + '`';
         } else if (typeof p === 'string') {
@@ -1252,8 +1252,8 @@ function processQuery(query, explain, planIndex) {
     idx.collection = node.collection;
     idx.node = node.id;
     if (node.hasOwnProperty('condition') && node.hasOwnProperty('allCoveredByOneIndex') &&
-        node.allCoveredByOneIndex) {
-       idx.condition = buildExpression(node.condition);
+      node.allCoveredByOneIndex) {
+      idx.condition = buildExpression(node.condition);
     } else if (node.hasOwnProperty('condition') && node.condition.type && node.condition.type === 'n-ary or') {
       idx.condition = buildExpression(node.condition.subNodes[i]);
     } else {
@@ -1316,7 +1316,7 @@ function processQuery(query, explain, planIndex) {
       return allIndexes;
     };
 
-    const handleGraphDefinition = (node) => { 
+    const handleGraphDefinition = (node) => {
       if (node.hasOwnProperty('graphDefinition')) {
         let v = [];
         let vNames = [];
@@ -1435,20 +1435,20 @@ function processQuery(query, explain, planIndex) {
 
         var scorersSort = '';
         if (node.hasOwnProperty('scorersSort') && node.scorersSort.length > 0) {
-          node.scorersSort.forEach(function(sort) {
-              if (scorersSort.length > 0 ) {
-                scorersSort += ', ';
-              }
-              scorersSort += variableName(node.scorers[sort.index]);
-              if (sort.asc) {
-                scorersSort += keyword(' ASC');
-              } else {
-                scorersSort += keyword(' DESC');
-              }
+          node.scorersSort.forEach(function (sort) {
+            if (scorersSort.length > 0) {
+              scorersSort += ', ';
+            }
+            scorersSort += variableName(node.scorers[sort.index]);
+            if (sort.asc) {
+              scorersSort += keyword(' ASC');
+            } else {
+              scorersSort += keyword(' DESC');
+            }
 
           });
-           scorersSort = keyword(' SORT ') + scorersSort;
-           scorersSort += keyword(' LIMIT ') + value('0, ' + JSON.stringify(node.scorersSortLimit));
+          scorersSort = keyword(' SORT ') + scorersSort;
+          scorersSort += keyword(' LIMIT ') + value('0, ' + JSON.stringify(node.scorersSortLimit));
 
         }
         let viewAnnotation = '/* view query';
@@ -1476,8 +1476,8 @@ function processQuery(query, explain, planIndex) {
           }).join('');
         }
         return keyword('FOR ') + variableName(node.outVariable) + keyword(' IN ') +
-               view(node.view) + condition + sortCondition + scorers + viewVariables +
-               scorersSort + '   ' + annotation(viewAnnotation);
+          view(node.view) + condition + sortCondition + scorers + viewVariables +
+          scorersSort + '   ' + annotation(viewAnnotation);
       case 'JoinNode':
         node.indexInfos.forEach((info) => {
           collectionVariables[info.outVariable.id] = info.collection;
@@ -1486,7 +1486,7 @@ function processQuery(query, explain, planIndex) {
             condition = buildExpression(info.condition);
           }
           info.index.condition = condition;
-          iterateIndexes(info.index, 0, {id: node.id, collection: info.collection}, types, false); 
+          iterateIndexes(info.index, 0, { id: node.id, collection: info.collection }, types, false);
         });
         return keyword('JOIN');
       case 'IndexNode':
@@ -1756,7 +1756,7 @@ function processQuery(query, explain, planIndex) {
         }
 
         kShortestPathsDetails.push(node);
-        
+
         handleGraphDefinition(node);
 
         indexes.push(...getGraphNodeIndexes(node));
@@ -1790,7 +1790,7 @@ function processQuery(query, explain, planIndex) {
           }
           collect += keyword('AGGREGATE') + ' ' +
             node.aggregates.map(function (node) {
-              return variableName(node.outVariable) + ' = ' + func(node.type) + '(' + (node.inVariable ? variableName(node.inVariable) : '') + ')';
+              return variableName(node.outVariable) + ' = ' + func(node.type) + '(' + (node.inVariable ? node.inVariable.map(i => variableName(i)).join(', ') : '') + ')';
             }).join(', ');
         }
         collect +=
@@ -1811,7 +1811,7 @@ function processQuery(query, explain, planIndex) {
       case 'SubqueryNode':
         return keyword('LET') + ' ' + variableName(node.outVariable) + ' = ...   ' + annotation('/* ' + (node.isConst ? 'const ' : '') + 'subquery */');
       case 'SubqueryStartNode':
-        return `${keyword('LET')} ${variableName(node.subqueryOutVariable)} = ( ${annotation(`/* subquery begin */`)}` ;
+        return `${keyword('LET')} ${variableName(node.subqueryOutVariable)} = ( ${annotation(`/* subquery begin */`)}`;
       case 'SubqueryEndNode':
         if (node.inVariable) {
           return `${keyword('RETURN')}  ${variableName(node.inVariable)} ) ${annotation(`/* subquery end */`)}`;
@@ -2043,7 +2043,7 @@ function processQuery(query, explain, planIndex) {
         return keyword('MATERIALIZE') + ' ' + variableName(node.outVariable) + (annotations.length > 0 ? annotation(` /*${annotations} */`) : '') + accessString;
       case 'OffsetMaterializeNode':
         return keyword('LET ') + variableName(node.outVariable) + ' = ' +
-               func('OFFSET_INFO') + '(' + variableName(node.viewVariable) + ', ' + buildExpression(node.options) + ')';
+          func('OFFSET_INFO') + '(' + variableName(node.viewVariable) + ', ' + buildExpression(node.options) + ')';
       case 'MutexNode':
         return keyword('MUTEX') + '   ' + annotation('/* end async execution */');
       case 'AsyncNode':
@@ -2107,7 +2107,7 @@ function processQuery(query, explain, planIndex) {
       node.indexInfos.forEach((info) => {
         let line = nodePrefix(node);
         if (profileMode) {
-          line += pad(1 + maxCallsLen) +  '   ' +
+          line += pad(1 + maxCallsLen) + '   ' +
             pad(1 + maxParallelLen) + '   ' +
             pad(1 + maxItemsLen) + '   ' +
             pad(1 + maxFilteredLen) + '   ' +
@@ -2176,7 +2176,7 @@ function processQuery(query, explain, planIndex) {
     }
   };
 
-  const callstackSplit = function(node) {
+  const callstackSplit = function (node) {
     if (node.isCallstackSplitEnabled) {
       return annotation(' /* callstack split */');
     }
@@ -2207,7 +2207,7 @@ function processQuery(query, explain, planIndex) {
 
   const printNode = function (node) {
     preHandle(node);
-    let line = nodePrefix(node); 
+    let line = nodePrefix(node);
 
     if (profileMode) {
       line += pad(1 + maxCallsLen - String(node.calls).length) + value(node.calls) + '   ' +
@@ -2247,7 +2247,7 @@ function processQuery(query, explain, planIndex) {
       pad(1 + maxRuntimeLen - String('Runtime [s]').length) + header('Runtime [s]') + '   ' +
       header('Comment');
   } else {
-    line += 
+    line +=
       pad(1 + maxParallelLen - String('Par').length) + header('Par') + '   ' +
       pad(1 + maxEstimateLen - String('Est.').length) + header('Est.') + '   ' +
       header('Comment');
@@ -2454,7 +2454,7 @@ function debug(query, bindVars, options) {
           } catch (err) { }
         } else {
           node.graph.forEach(edgeColl => {
-            collections.push({name: edgeColl});
+            collections.push({ name: edgeColl });
           });
         }
       } else if (node.type === 'SubqueryNode') {
@@ -2466,7 +2466,7 @@ function debug(query, bindVars, options) {
   // mangle with graphs used in query
   findGraphs(result.explain.plan.nodes);
 
-  let handleCollection = function(collection) {
+  let handleCollection = function (collection) {
     let c = db._collection(collection.name);
     if (c === null) {
       // probably a view...
@@ -2521,15 +2521,15 @@ function debug(query, bindVars, options) {
 
   // add prototypes used for distributeShardsLike
   let sortedCollections = [];
-  Object.values(result.collections).forEach(function(collection) {
+  Object.values(result.collections).forEach(function (collection) {
     if (collection.properties.distributeShardsLike &&
-        !result.collections.hasOwnProperty(collection.distributeShardsLike)) {
+      !result.collections.hasOwnProperty(collection.distributeShardsLike)) {
       handleCollection({ name: collection.name });
     }
     sortedCollections.push(collection);
   });
 
-  sortedCollections.sort(function(l, r) {
+  sortedCollections.sort(function (l, r) {
     if (l.properties.distributeShardsLike && !r.properties.distributeShardsLike) {
       return 1;
     } else if (!l.properties.distributeShardsLike && r.properties.distributeShardsLike) {
@@ -2550,7 +2550,7 @@ function debug(query, bindVars, options) {
   });
 
   result.collections = {};
-  sortedCollections.forEach(function(c) {
+  sortedCollections.forEach(function (c) {
     result.collections[c.name] = c;
   });
 
@@ -2719,7 +2719,7 @@ function explainQueryRegisters(plan) {
    */
 
   // Currently, we need nothing but the nodes from plan.
-  const {nodes} = plan;
+  const { nodes } = plan;
   const symbols = {
     clearRegister: '⮾',
     keepRegister: '↓',
@@ -2760,8 +2760,8 @@ function explainQueryRegisters(plan) {
   const rootNode = nodes[nodes.length - 1];
 
   const subqueryStack = [];
-  for (let node = rootNode; node !== undefined; ) {
-    const current = {node};
+  for (let node = rootNode; node !== undefined;) {
+    const current = { node };
     nodesData.push(current);
     if (node.type === 'SubqueryNode') {
       subqueryStack.push(node);
@@ -2771,7 +2771,7 @@ function explainQueryRegisters(plan) {
       node = nodesById[node.dependencies[0]];
     } else if (subqueryStack.length > 0) {
       node = subqueryStack.pop();
-      const current = {node};
+      const current = { node };
       current.direction = 'open';
       nodesData.push(current);
       node = nodesById[node.dependencies[0]];
@@ -2820,7 +2820,7 @@ function explainQueryRegisters(plan) {
     const regIdByVarId = Object.fromEntries(
       varInfoList.filter(varInfo => varInfo.RegisterId < 1000).map(varInfo => [varInfo.VariableId, varInfo.RegisterId]));
 
-    const meta = {id, type, depth};
+    const meta = { id, type, depth };
     const result = [];
 
     const varName = (variable) => {
@@ -2837,10 +2837,10 @@ function explainQueryRegisters(plan) {
       varsUsedHere.map(variable => [regIdByVarId[variable.id], varName(variable)]));
 
     const regIdToVarNameMapStack = regVarMapStack.map(rvmap =>
-        Object.fromEntries(_.toPairsIn(rvmap).map(
-            (p) => [parseInt(p[0]), varName(p[1])]
-        )
-    ));
+      Object.fromEntries(_.toPairsIn(rvmap).map(
+        (p) => [parseInt(p[0]), varName(p[1])]
+      )
+      ));
 
     /**
      * @param {number} nrRegs
@@ -2908,24 +2908,24 @@ function explainQueryRegisters(plan) {
         let regsToKeep = regsToKeepStack[regsToKeepStack.length - 2];
         let regVarMap = regIdToVarNameMapStack[regIdToVarNameMapStack.length - 2];
         const unusedRegs = unusedRegsStack[unusedRegsStack.length - 1];
-        result.push({meta, registerFields: createRegisterFields(nrRegs, {regIdToVarNameUsedHere, unusedRegs, regVarMap})});
-        result.push({registerFields: createRegisterFields(nrRegs, {regsToClear, regsToKeep})});
-        result.push({separator: symbols.subqueryBegin, registerFields: createRegisterFields(nrRegs)});
+        result.push({ meta, registerFields: createRegisterFields(nrRegs, { regIdToVarNameUsedHere, unusedRegs, regVarMap }) });
+        result.push({ registerFields: createRegisterFields(nrRegs, { regsToClear, regsToKeep }) });
+        result.push({ separator: symbols.subqueryBegin, registerFields: createRegisterFields(nrRegs) });
         regsToKeep = regsToKeepStack[regsToKeepStack.length - 1];
         regVarMap = regIdToVarNameMapStack[regIdToVarNameMapStack.length - 1];
-        result.push({meta, registerFields: createRegisterFields(nrRegs, {regIdToVarNameSetHere, regVarMap, unusedRegs})});
-        result.push({registerFields: createRegisterFields(nrRegs, {regsToKeep})});
+        result.push({ meta, registerFields: createRegisterFields(nrRegs, { regIdToVarNameSetHere, regVarMap, unusedRegs }) });
+        result.push({ registerFields: createRegisterFields(nrRegs, { regsToKeep }) });
       }
         break;
       case 'SubqueryEndNode': {
-        const nrRegsInner = nrRegsArray[depth-1];
+        const nrRegsInner = nrRegsArray[depth - 1];
         const unusedRegs = unusedRegsStack[unusedRegsStack.length - 1];
-        result.push({meta, registerFields: createRegisterFields(nrRegsInner, {unusedRegs, regIdToVarNameUsedHere})});
-        result.push({separator: symbols.subqueryEnd, registerFields: createRegisterFields(nrRegsInner)});
+        result.push({ meta, registerFields: createRegisterFields(nrRegsInner, { unusedRegs, regIdToVarNameUsedHere }) });
+        result.push({ separator: symbols.subqueryEnd, registerFields: createRegisterFields(nrRegsInner) });
         const regsToKeep = regsToKeepStack[regsToKeepStack.length - 1];
         const regVarMap = regIdToVarNameMapStack[regIdToVarNameMapStack.length - 1];
-        result.push({meta, registerFields: createRegisterFields(nrRegs, {regIdToVarNameSetHere, regVarMap})});
-        result.push({registerFields: createRegisterFields(nrRegs, {regsToClear, regsToKeep})});
+        result.push({ meta, registerFields: createRegisterFields(nrRegs, { regIdToVarNameSetHere, regVarMap }) });
+        result.push({ registerFields: createRegisterFields(nrRegs, { regsToClear, regsToKeep }) });
       }
         break;
       case 'SubqueryNode': {
@@ -2933,15 +2933,15 @@ function explainQueryRegisters(plan) {
         switch (direction) {
           case 'open': {
             // We could print regIdToVarNameUsedHere here...
-            result.push({separator: symbols.subqueryBegin, registerFields: createRegisterFields(nrRegs)});
+            result.push({ separator: symbols.subqueryBegin, registerFields: createRegisterFields(nrRegs) });
           }
             break;
           case 'close': {
             const regsToKeep = regsToKeepStack[regsToKeepStack.length - 1];
             const unusedRegs = unusedRegsStack[unusedRegsStack.length - 1];
-            result.push({separator: symbols.subqueryEnd, registerFields: createRegisterFields(nrRegs)});
-            result.push({meta, registerFields: createRegisterFields(nrRegs, {regIdToVarNameSetHere, unusedRegs, regVarMap})});
-            result.push({registerFields: createRegisterFields(nrRegs, {regsToClear, regsToKeep})});
+            result.push({ separator: symbols.subqueryEnd, registerFields: createRegisterFields(nrRegs) });
+            result.push({ meta, registerFields: createRegisterFields(nrRegs, { regIdToVarNameSetHere, unusedRegs, regVarMap }) });
+            result.push({ registerFields: createRegisterFields(nrRegs, { regsToClear, regsToKeep }) });
           }
             break;
         }
@@ -2951,13 +2951,13 @@ function explainQueryRegisters(plan) {
         const regsToKeep = regsToKeepStack[regsToKeepStack.length - 1];
         const unusedRegs = unusedRegsStack[unusedRegsStack.length - 1];
         const regVarMap = regIdToVarNameMapStack[regIdToVarNameMapStack.length - 1];
-        result.push({meta, registerFields: createRegisterFields(nrRegs, {regIdToVarNameUsedHere, regIdToVarNameSetHere, unusedRegs, regVarMap})});
-        result.push({registerFields: createRegisterFields(nrRegs, {regsToClear, regsToKeep})});
+        result.push({ meta, registerFields: createRegisterFields(nrRegs, { regIdToVarNameUsedHere, regIdToVarNameSetHere, unusedRegs, regVarMap }) });
+        result.push({ registerFields: createRegisterFields(nrRegs, { regsToClear, regsToKeep }) });
       }
     }
 
     return result;
-    }
+  }
   );
 
   //////////////////////////////////////////////////////////////////////////////
@@ -2965,9 +2965,9 @@ function explainQueryRegisters(plan) {
   // like the maximum width of all columns.
   //////////////////////////////////////////////////////////////////////////////
   const columns = [
-    {name: 'id', alignment: 'r'},
-    {name: 'type', alignment: 'l'},
-    {name: 'depth', alignment: 'r'},
+    { name: 'id', alignment: 'r' },
+    { name: 'type', alignment: 'l' },
+    { name: 'depth', alignment: 'r' },
   ];
 
   /**

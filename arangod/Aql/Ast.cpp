@@ -4452,9 +4452,10 @@ arangodb::aql::AstNode* arangodb::aql::Ast::createNodeCoverVariable(
 
       return node;
     }
-    if (!isUserDefined && !_scopes.existsVariableInCurrentScope(name)) {
+    if (!isUserDefined &&
+        !_scopes.existsVariableInCurrentScope(name)) {  // 尝试覆盖
       // special variable
-      auto variable = _variables.createVariable(name, isUserDefined);
+      Variable* variable = _variables.createCoverVariable(name, isUserDefined);
       _scopes.replaceVariable(variable);
 
       AstNode* node = createNode(NODE_TYPE_VARIABLE);

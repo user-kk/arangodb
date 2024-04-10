@@ -133,6 +133,9 @@ class Scopes {
   /// this also allows using special pseudo vars such as OLD and NEW
   Variable const* getVariable(std::string_view name, bool allowSpecial) const;
 
+  Variable const* getRealVariable(std::string_view name,
+                                  bool allowSpecial) const;
+
   /// @brief get the $CURRENT variable
   Variable const* getCurrentVariable() const;
 

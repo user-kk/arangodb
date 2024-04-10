@@ -90,6 +90,13 @@ Variable* VariableGenerator::createVariable(std::string_view name,
   return (*it).second.get();
 }
 
+Variable* VariableGenerator::createCoverVariable(std::string_view name,
+                                                 bool isUserDefined) {
+  Variable* ret = createVariable(name, isUserDefined);
+  ret->setOverlay();
+  return ret;
+}
+
 Variable* VariableGenerator::createVariable(Variable const* original) {
   TRI_ASSERT(original != nullptr);
   std::unique_ptr<Variable> variable(original->clone());

@@ -232,3 +232,17 @@ bool arangodb::aql::Scopes::existsVariableInCurrentScope(
 
   return variable != nullptr;
 };
+arangodb::aql::Variable const* arangodb::aql::Scopes::getRealVariable(
+    std::string_view name, bool allowSpecial) const {
+  TRI_ASSERT(!_activeScopes.empty());
+
+  for (auto it = _activeScopes.rbegin(); it != _activeScopes.rend(); ++it) {
+    auto variable = (*it)->getVariable(name, allowSpecial);
+
+    if (variable != nullptr && !variable->isOverlay()) {
+      return variable;
+    }
+  }
+
+  return nullptr;
+};

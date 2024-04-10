@@ -68,6 +68,10 @@ class VariableGenerator {
   /// @brief clones a variable from an existing one
   Variable* createVariable(Variable const*);
 
+  /// @brief   generate a variable to override another variable
+  /// @warning 只能用于from子句覆盖掉with子查询的变量
+  Variable* createCoverVariable(std::string_view, bool);
+
   /// @brief generate a temporary variable
   Variable* createTemporaryVariable();
 

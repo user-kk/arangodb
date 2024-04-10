@@ -2598,15 +2598,18 @@ collection_pair:
         parser->ast()->addOperation(node);
       }else if($1->type ==NODE_TYPE_REFERENCE) {
         //找到引用的变量
-        Variable* expVariable = static_cast<Variable*>($1->getData());
-        
+        const Variable* expVariable = static_cast<Variable*>($1->getData());
+        //可能找到被覆盖的变量，所以用变量名去找真正的变量
+        expVariable=parser->ast()->scopes()->getRealVariable(expVariable->name, true);
+        //重新生成引用节点
+        AstNode* refNode = parser->ast()->createNodeReference(expVariable);
         parser->ast()->scopes()->start(arangodb::aql::AQL_SCOPE_FOR);
         //覆盖掉原有的变量
         AstNode* variableNode = parser->ast()->createNodeCoverVariable(expVariable->name, false);
         Variable* variable = static_cast<Variable*>(variableNode->getData());
         //创建整个Node_type_for节点
         AstNode* options = nullptr;
-        AstNode* node = parser->ast()->createNodeFor(variable, $1, options);
+        AstNode* node = parser->ast()->createNodeFor(variable, refNode, options);
         //向整个ast的_root添加member
         parser->ast()->addOperation(node);
 
@@ -2614,7 +2617,7 @@ collection_pair:
         parser->kk();
         parser->registerParseError(TRI_ERROR_QUERY_PARSE, "you need an alia", yylloc.first_line, yylloc.first_column);
       }
-    } | unnest_statement {
+    } unnest_statement {
 
     }
   ;

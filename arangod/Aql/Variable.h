@@ -130,6 +130,10 @@ struct Variable {
   /// collection AND is a full document. this is only used for optimizations
   bool isFullDocumentFromCollection;
 
+  void setOverlay() { _isOverlay = true; }
+
+  bool isOverlay() const { return _isOverlay; }
+
  private:
   arangodb::ResourceMonitor& _resourceMonitor;
 
@@ -140,6 +144,8 @@ struct Variable {
   // while initializing the plan. Note: the variable takes ownership of this
   // value and destroys it
   AqlValue _constantValue;
+  ///@brief 这个变量覆盖了别的变量
+  bool _isOverlay = false;
 };
 }  // namespace aql
 }  // namespace arangodb

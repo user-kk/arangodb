@@ -53,7 +53,8 @@ HashedCollectExecutorInfos::HashedCollectExecutorInfos(
     RegisterId collectRegister, RegisterId expressionRegister,
     Variable const* expressionVariable, std::vector<std::string> aggregateTypes,
     std::vector<std::pair<std::string, RegisterId>>&& inputVariables,
-    std::vector<std::pair<RegisterId, RegisterId>>&& aggregateRegisters,
+    std::vector<std::pair<RegisterId, std::vector<RegisterId>>>&&
+        aggregateRegisters,
     velocypack::Options const* opts, arangodb::ResourceMonitor& resourceMonitor)
     : _aggregateTypes(aggregateTypes),
       _aggregateRegisters(aggregateRegisters),
@@ -72,7 +73,7 @@ HashedCollectExecutorInfos::getGroupRegisters() const {
   return _groupRegisters;
 }
 
-std::vector<std::pair<RegisterId, RegisterId>> const&
+std::vector<std::pair<RegisterId, std::vector<RegisterId>>> const&
 HashedCollectExecutorInfos::getAggregatedRegisters() const {
   return _aggregateRegisters;
 }
@@ -161,11 +162,16 @@ void HashedCollectExecutor::consumeInputRow(InputAqlItemRow& input) {
                    _infos.getAggregatedRegisters().size());
     size_t j = 0;
     for (auto const& r : _infos.getAggregatedRegisters()) {
-      if (r.second.value() == RegisterId::maxRegisterId) {
-        (*aggregateValues)[j].reduce(EmptyValue);
-      } else {
-        (*aggregateValues)[j].reduce(input.getValue(r.second));  // 进行聚集
+      VPackFunctionParameters params;
+      for (auto i : r.second) {
+        if (i.value() == RegisterId::maxRegisterId) {
+          params.push_back(EmptyValue);
+        } else {
+          params.push_back(input.getValue(i));
+        }
       }
+      // 进行聚集
+      (*aggregateValues)[j].reduce(params);
       ++j;
     }
   }

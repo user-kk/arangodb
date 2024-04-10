@@ -135,6 +135,34 @@ Variable* Variable::varFromVPack(Ast* ast, velocypack::Slice base,
   return ast->variables()->createVariable(variable);
 }
 
+/// @brief factory for (optional) variables from VPack
+std::vector<Variable*> Variable::varsFromVPack(Ast* ast, velocypack::Slice base,
+                                               std::string_view variableName,
+                                               bool optional) {
+  VPackSlice variable = base.get(variableName);
+
+  if (variable.isNone()) {
+    if (optional) {
+      return {};
+    }
+
+    std::string msg;
+    msg +=
+        "mandatory variable \"" + std::string(variableName) + "\" not found.";
+    THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_INTERNAL, std::move(msg));
+  }
+  std::vector<Variable*> ret;
+  if (variable.isObject()) {
+    return {ast->variables()->createVariable(variable)};
+  } else if (variable.isArray()) {
+    for (auto const& it : velocypack::ArrayIterator(variable)) {
+      ret.push_back(ast->variables()->createVariable(it));
+    }
+  }
+
+  return ret;
+}
+
 bool Variable::isEqualTo(Variable const& other) const noexcept {
   return (id == other.id) && (name == other.name);
 }

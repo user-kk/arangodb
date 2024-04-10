@@ -24,6 +24,8 @@
 #pragma once
 
 #include "Aql/AqlValue.h"
+#include "Containers/SmallVector.h"
+#include "Aql/Functions.h"
 
 #include <functional>
 #include <memory>
@@ -54,7 +56,7 @@ struct Aggregator {
   explicit Aggregator(velocypack::Options const* opts) : _vpackOptions(opts) {}
   virtual ~Aggregator() = default;
   virtual void reset() = 0;
-  virtual void reduce(AqlValue const&) = 0;
+  virtual void reduce(VPackFunctionParametersView) = 0;
   virtual AqlValue get() const = 0;
   AqlValue stealValue() {
     AqlValue r = this->get();

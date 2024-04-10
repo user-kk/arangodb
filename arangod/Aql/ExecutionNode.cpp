@@ -354,12 +354,15 @@ ExecutionNode* ExecutionNode::fromVPackFactory(ExecutionPlan* plan,
         for (VPackSlice it : VPackArrayIterator(aggregatesSlice)) {
           Variable* outVar =
               Variable::varFromVPack(plan->getAst(), it, "outVariable");
-          Variable* inVar =
-              Variable::varFromVPack(plan->getAst(), it, "inVariable", true);
+
+          std::vector<Variable*> inVars =
+              Variable::varsFromVPack(plan->getAst(), it, "inVariable", true);
 
           std::string const type = it.get("type").copyString();
+          std::vector<const Variable*> constInVars(inVars.begin(),
+                                                   inVars.end());
           aggregateVariables.emplace_back(
-              AggregateVarInfo{outVar, inVar, type});
+              AggregateVarInfo{outVar, constInVars, type});
         }
       }
 
@@ -450,12 +453,14 @@ ExecutionNode* ExecutionNode::fromVPackFactory(ExecutionPlan* plan,
         for (VPackSlice it : VPackArrayIterator(aggregatesSlice)) {
           Variable* outVar =
               Variable::varFromVPack(plan->getAst(), it, "outVariable");
-          Variable* inVar =
-              Variable::varFromVPack(plan->getAst(), it, "inVariable", true);
+          std::vector<Variable*> inVars =
+              Variable::varsFromVPack(plan->getAst(), it, "inVariable", true);
 
           std::string const type = it.get("type").copyString();
+          std::vector<const Variable*> constInVars(inVars.begin(),
+                                                   inVars.end());
           aggregateVariables.emplace_back(
-              AggregateVarInfo{outVar, inVar, type});
+              AggregateVarInfo{outVar, constInVars, type});
         }
       }
 

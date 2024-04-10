@@ -25,6 +25,7 @@
 
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace arangodb {
 namespace velocypack {
@@ -74,7 +75,7 @@ struct GroupVarInfo final {
 
 struct AggregateVarInfo final {
   Variable const* outVar;
-  Variable const* inVar;
+  std::vector<Variable const*> inVars;
   std::string type;
 };
 

@@ -58,7 +58,8 @@ class WindowExecutorInfos {
   WindowExecutorInfos(
       WindowBounds const& b, RegisterId rangeRegister,
       std::vector<std::string> aggregateTypes,
-      std::vector<std::pair<RegisterId, RegisterId>>&& aggregateRegisters,
+      std::vector<std::pair<RegisterId, std::vector<RegisterId>>>&&
+          aggregateRegisters,
       QueryWarnings& warnings, velocypack::Options const* options);
 
   WindowExecutorInfos() = delete;
@@ -69,7 +70,8 @@ class WindowExecutorInfos {
  public:
   WindowBounds const& bounds() const;
   RegisterId rangeRegister() const;
-  std::vector<std::pair<RegisterId, RegisterId>> getAggregatedRegisters() const;
+  std::vector<std::pair<RegisterId, std::vector<RegisterId>>>
+  getAggregatedRegisters() const;
   std::vector<std::string> const& getAggregateTypes() const;
   QueryWarnings& warnings() const;
   velocypack::Options const* getVPackOptions() const;
@@ -83,7 +85,8 @@ class WindowExecutorInfos {
   std::vector<std::string> _aggregateTypes;
 
   /// @brief pairs, consisting of out register and in register
-  std::vector<std::pair<RegisterId, RegisterId>> _aggregateRegisters;
+  std::vector<std::pair<RegisterId, std::vector<RegisterId>>>
+      _aggregateRegisters;
 
   QueryWarnings& _warnings;
 

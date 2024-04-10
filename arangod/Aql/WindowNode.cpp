@@ -355,9 +355,12 @@ void WindowNode::doToVelocyPack(VPackBuilder& nodes, unsigned flags) const {
       VPackObjectBuilder obj(&nodes);
       nodes.add(VPackValue("outVariable"));
       aggregateVariable.outVar->toVelocyPack(nodes);
-      if (aggregateVariable.inVar) {
-        nodes.add(VPackValue("inVariable"));
-        aggregateVariable.inVar->toVelocyPack(nodes);
+      if (!aggregateVariable.inVars.empty()) {
+        nodes.add("inVariable", VPackValue(VPackValueType::Array));
+        for (auto& i : aggregateVariable.inVars) {
+          i->toVelocyPack(nodes);
+        }
+        nodes.close();
       }
       nodes.add("type", VPackValue(aggregateVariable.type));
     }
@@ -367,7 +370,8 @@ void WindowNode::doToVelocyPack(VPackBuilder& nodes, unsigned flags) const {
 }
 
 void WindowNode::calcAggregateRegisters(
-    std::vector<std::pair<RegisterId, RegisterId>>& aggregateRegisters,
+    std::vector<std::pair<RegisterId, std::vector<RegisterId>>>&
+        aggregateRegisters,
     RegIdSet& readableInputRegisters,
     RegIdSet& writeableOutputRegisters) const {
   for (auto const& p : _aggregateVariables) {
@@ -378,17 +382,22 @@ void WindowNode::calcAggregateRegisters(
     RegisterId outReg = itOut->second.registerId;
     TRI_ASSERT(outReg.isValid());
 
-    RegisterId inReg = RegisterPlan::MaxRegisterId;
+    std::vector<RegisterId> inRegs;
+    inRegs.reserve(p.inVars.size());
+
     if (Aggregator::requiresInput(p.type)) {
-      auto itIn = getRegisterPlan()->varInfo.find(p.inVar->id);
-      TRI_ASSERT(itIn != getRegisterPlan()->varInfo.end());
-      inReg = itIn->second.registerId;
-      TRI_ASSERT(inReg.isValid());
-      readableInputRegisters.insert(inReg);
+      for (auto i : p.inVars) {
+        auto itIn = getRegisterPlan()->varInfo.find(i->id);
+        TRI_ASSERT(itIn != getRegisterPlan()->varInfo.end());
+        auto& inReg = itIn->second.registerId;
+        TRI_ASSERT(inReg.isValid());
+        inRegs.push_back(inReg);
+        readableInputRegisters.insert(inReg);
+      }
     }
     // else: no input variable required
 
-    aggregateRegisters.emplace_back(std::make_pair(outReg, inReg));
+    aggregateRegisters.emplace_back(std::make_pair(outReg, std::move(inRegs)));
     writeableOutputRegisters.insert((outReg));
   }
   TRI_ASSERT(aggregateRegisters.size() == _aggregateVariables.size());
@@ -421,7 +430,8 @@ std::unique_ptr<ExecutionBlock> WindowNode::createBlock(
   }
 
   // calculate the aggregate registers
-  std::vector<std::pair<RegisterId, RegisterId>> aggregateRegisters;
+  std::vector<std::pair<RegisterId, std::vector<RegisterId>>>
+      aggregateRegisters;
   calcAggregateRegisters(aggregateRegisters, readableInputRegisters,
                          writeableOutputRegisters);
 
@@ -464,7 +474,9 @@ void WindowNode::replaceVariables(
     std::unordered_map<VariableId, Variable const*> const& replacements) {
   _rangeVariable = Variable::replace(_rangeVariable, replacements);
   for (auto& variable : _aggregateVariables) {
-    variable.inVar = Variable::replace(variable.inVar, replacements);
+    for (auto& i : variable.inVars) {
+      i = Variable::replace(i, replacements);
+    }
   }
 }
 
@@ -474,8 +486,8 @@ void WindowNode::getVariablesUsedHere(VarSet& vars) const {
     vars.emplace(_rangeVariable);
   }
   for (auto const& p : _aggregateVariables) {
-    if (p.inVar) {
-      vars.emplace(p.inVar);
+    for (auto i : p.inVars) {
+      vars.emplace(i);
     }
   }
 }

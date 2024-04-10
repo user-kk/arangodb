@@ -40,6 +40,8 @@
 
 #include <velocypack/Builder.h>
 #include <velocypack/Value.h>
+#include <velocypack/ValueType.h>
+#include <vector>
 
 using namespace arangodb;
 using namespace arangodb::aql;
@@ -108,10 +110,14 @@ void CollectNode::doToVelocyPack(VPackBuilder& nodes,
       VPackObjectBuilder obj(&nodes);
       nodes.add(VPackValue("outVariable"));
       aggregateVariable.outVar->toVelocyPack(nodes);
-      if (aggregateVariable.inVar) {
-        nodes.add(VPackValue("inVariable"));
-        aggregateVariable.inVar->toVelocyPack(nodes);
+      if (!aggregateVariable.inVars.empty()) {
+        nodes.add("inVariable", VPackValue(VPackValueType::Array));
+        for (auto& i : aggregateVariable.inVars) {
+          i->toVelocyPack(nodes);
+        }
+        nodes.close();
       }
+
       nodes.add("type", VPackValue(aggregateVariable.type));
     }
   }
@@ -194,7 +200,8 @@ void CollectNode::calcGroupRegisters(
 }
 
 void CollectNode::calcAggregateRegisters(
-    std::vector<std::pair<RegisterId, RegisterId>>& aggregateRegisters,
+    std::vector<std::pair<RegisterId, std::vector<RegisterId>>>&
+        aggregateRegisters,
     RegIdSet& readableInputRegisters,
     RegIdSet& writeableOutputRegisters) const {
   for (auto const& p : _aggregateVariables) {
@@ -205,17 +212,22 @@ void CollectNode::calcAggregateRegisters(
     RegisterId outReg = itOut->second.registerId;
     TRI_ASSERT(outReg.isValid());
 
-    RegisterId inReg{RegisterId::maxRegisterId};
+    std::vector<RegisterId> inRegs;
+    inRegs.reserve(p.inVars.size());
+
     if (Aggregator::requiresInput(p.type)) {
-      auto itIn = getRegisterPlan()->varInfo.find(p.inVar->id);
-      TRI_ASSERT(itIn != getRegisterPlan()->varInfo.end());
-      inReg = itIn->second.registerId;
-      TRI_ASSERT(inReg.isValid());
-      readableInputRegisters.insert(inReg);
+      for (auto i : p.inVars) {
+        auto itIn = getRegisterPlan()->varInfo.find(i->id);
+        TRI_ASSERT(itIn != getRegisterPlan()->varInfo.end());
+        auto& inReg = itIn->second.registerId;
+        TRI_ASSERT(inReg.isValid());
+        inRegs.push_back(inReg);
+        readableInputRegisters.insert(inReg);
+      }
     }
     // else: no input variable required
 
-    aggregateRegisters.emplace_back(std::make_pair(outReg, inReg));
+    aggregateRegisters.emplace_back(std::make_pair(outReg, std::move(inRegs)));
     writeableOutputRegisters.insert((outReg));
   }
   TRI_ASSERT(aggregateRegisters.size() == _aggregateVariables.size());
@@ -274,7 +286,8 @@ std::unique_ptr<ExecutionBlock> CollectNode::createBlock(
                          writeableOutputRegisters);
 
       // calculate the aggregate registers
-      std::vector<std::pair<RegisterId, RegisterId>> aggregateRegisters;
+      std::vector<std::pair<RegisterId, std::vector<RegisterId>>>
+          aggregateRegisters;
       calcAggregateRegisters(aggregateRegisters, readableInputRegisters,
                              writeableOutputRegisters);
 
@@ -323,7 +336,8 @@ std::unique_ptr<ExecutionBlock> CollectNode::createBlock(
                          writeableOutputRegisters);
 
       // calculate the aggregate registers
-      std::vector<std::pair<RegisterId, RegisterId>> aggregateRegisters;
+      std::vector<std::pair<RegisterId, std::vector<RegisterId>>>
+          aggregateRegisters;
       calcAggregateRegisters(aggregateRegisters, readableInputRegisters,
                              writeableOutputRegisters);
 
@@ -647,7 +661,9 @@ void CollectNode::replaceVariables(
     variable = Variable::replace(old, replacements);
   }
   for (auto& variable : _aggregateVariables) {
-    variable.inVar = Variable::replace(variable.inVar, replacements);
+    for (auto& i : variable.inVars) {
+      i = Variable::replace(i, replacements);
+    }
   }
   if (_expressionVariable != nullptr) {
     _expressionVariable = Variable::replace(_expressionVariable, replacements);
@@ -663,8 +679,8 @@ void CollectNode::getVariablesUsedHere(VarSet& vars) const {
     vars.emplace(p.inVar);
   }
   for (auto const& p : _aggregateVariables) {
-    if (p.inVar) {
-      vars.emplace(p.inVar);
+    for (auto i : p.inVars) {
+      vars.emplace(i);
     }
   }
 
@@ -763,7 +779,7 @@ void CollectNode::clearAggregates(
       if (!Aggregator::requiresInput(it->type)) {
         // aggregator has an input variable attached, but doesn't need it.
         // remove the dependency, e.g.  COUNT(1) => COUNT()
-        it->inVar = nullptr;
+        it->inVars.clear();
       }
       ++it;
     }

@@ -124,7 +124,8 @@ SortedCollectExecutorInfos::SortedCollectExecutorInfos(
     RegisterId collectRegister, RegisterId expressionRegister,
     Variable const* expressionVariable, std::vector<std::string> aggregateTypes,
     std::vector<std::pair<std::string, RegisterId>>&& inputVariables,
-    std::vector<std::pair<RegisterId, RegisterId>>&& aggregateRegisters,
+    std::vector<std::pair<RegisterId, std::vector<RegisterId>>>&&
+        aggregateRegisters,
     velocypack::Options const* opts)
     : _aggregateTypes(std::move(aggregateTypes)),
       _aggregateRegisters(std::move(aggregateRegisters)),
@@ -155,12 +156,17 @@ void SortedCollectExecutor::CollectGroup::addLine(
   for (auto& it : this->aggregators) {
     TRI_ASSERT(!this->aggregators.empty());
     TRI_ASSERT(infos.getAggregatedRegisters().size() > j);
-    RegisterId const reg = infos.getAggregatedRegisters()[j].second;
-    if (reg.value() != RegisterId::maxRegisterId) {
-      it->reduce(input.getValue(reg));
-    } else {
-      it->reduce(EmptyValue);
+
+    std::vector<RegisterId> regs = infos.getAggregatedRegisters()[j].second;
+    VPackFunctionParameters params;
+    for (auto i : regs) {
+      if (i.value() == RegisterId::maxRegisterId) {
+        params.push_back(EmptyValue);
+      } else {
+        params.push_back(input.getValue(i));
+      }
     }
+    it->reduce(params);
     ++j;
   }
   TRI_IF_FAILURE("SortedCollectBlock::getOrSkipSome") {
@@ -281,8 +287,8 @@ void SortedCollectExecutor::CollectGroup::writeToOutput(
 }
 
 [[nodiscard]] auto SortedCollectExecutor::expectedNumberOfRows(
-    AqlItemBlockInputRange const& input, AqlCall const& call) const noexcept
-    -> size_t {
+    AqlItemBlockInputRange const& input,
+    AqlCall const& call) const noexcept -> size_t {
   if (input.finalState() == MainQueryState::DONE) {
     // Worst case assumption:
     // For every input row we have a new group.

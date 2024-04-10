@@ -108,7 +108,8 @@ class CollectNode : public ExecutionNode {
 
   /// @brief calculate the aggregate registers
   void calcAggregateRegisters(
-      std::vector<std::pair<RegisterId, RegisterId>>& aggregateRegisters,
+      std::vector<std::pair<RegisterId, std::vector<RegisterId>>>&
+          aggregateRegisters,
       RegIdSet& readableInputRegisters,
       RegIdSet& writeableOutputRegisters) const;
 

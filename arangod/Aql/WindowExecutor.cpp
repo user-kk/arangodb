@@ -46,7 +46,8 @@ static const AqlValue EmptyValue;
 WindowExecutorInfos::WindowExecutorInfos(
     WindowBounds const& bounds, RegisterId rangeRegister,
     std::vector<std::string> aggregateTypes,
-    std::vector<std::pair<RegisterId, RegisterId>>&& aggregateRegisters,
+    std::vector<std::pair<RegisterId, std::vector<RegisterId>>>&&
+        aggregateRegisters,
     QueryWarnings& w, velocypack::Options const* opts)
     : _bounds(bounds),
       _rangeRegister(rangeRegister),
@@ -61,7 +62,7 @@ WindowBounds const& WindowExecutorInfos::bounds() const { return _bounds; }
 
 RegisterId WindowExecutorInfos::rangeRegister() const { return _rangeRegister; }
 
-std::vector<std::pair<RegisterId, RegisterId>>
+std::vector<std::pair<RegisterId, std::vector<RegisterId>>>
 WindowExecutorInfos::getAggregatedRegisters() const {
   return _aggregateRegisters;
 }
@@ -110,11 +111,16 @@ void BaseWindowExecutor::applyAggregators(InputAqlItemRow& input) {
   TRI_ASSERT(_aggregators.size() == _infos.getAggregatedRegisters().size());
   size_t j = 0;
   for (auto const& r : _infos.getAggregatedRegisters()) {
-    if (r.second.value() == RegisterId::maxRegisterId) {  // e.g. LENGTH / COUNT
-      _aggregators[j]->reduce(::EmptyValue);
-    } else {
-      _aggregators[j]->reduce(input.getValue(/*inRegister*/ r.second));
+    VPackFunctionParameters params;
+    for (auto i : r.second) {
+      if (i.value() == RegisterId::maxRegisterId) {
+        params.push_back(EmptyValue);
+      } else {
+        params.push_back(input.getValue(i));
+      }
     }
+    // 进行聚集
+    _aggregators[j]->reduce(params);
     ++j;
   }
 }
@@ -204,8 +210,8 @@ auto AccuWindowExecutor::skipRowsRange(AqlItemBlockInputRange& inputRange,
 }
 
 [[nodiscard]] auto AccuWindowExecutor::expectedNumberOfRows(
-    AqlItemBlockInputRange const& input, AqlCall const& call) const noexcept
-    -> size_t {
+    AqlItemBlockInputRange const& input,
+    AqlCall const& call) const noexcept -> size_t {
   if (input.finalState() == MainQueryState::DONE) {
     // For every input row we produce a new row.
     auto estOnInput = input.countDataRows();
@@ -441,8 +447,8 @@ WindowExecutor::skipRowsRange(AqlItemBlockInputRange& inputRange,
 }
 
 [[nodiscard]] auto WindowExecutor::expectedNumberOfRows(
-    AqlItemBlockInputRange const& input, AqlCall const& call) const noexcept
-    -> size_t {
+    AqlItemBlockInputRange const& input,
+    AqlCall const& call) const noexcept -> size_t {
   if (input.finalState() == MainQueryState::DONE) {
     size_t remain = _currentIdx < _rows.size() ? _rows.size() - _currentIdx : 0;
     remain += input.countDataRows();

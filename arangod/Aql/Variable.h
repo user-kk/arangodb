@@ -100,6 +100,11 @@ struct Variable {
                                 std::string_view variableName,
                                 bool optional = false);
 
+  /// @brief factory for (optional) variables from VPack
+  static std::vector<Variable*> varsFromVPack(Ast* ast, velocypack::Slice base,
+                                              std::string_view variableName,
+                                              bool optional = false);
+
   bool isEqualTo(Variable const& other) const noexcept;
 
   /// @brief returns the type of the variable. The type is determined based

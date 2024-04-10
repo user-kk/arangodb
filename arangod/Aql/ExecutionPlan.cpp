@@ -2861,7 +2861,7 @@ std::vector<AggregateVarInfo> ExecutionPlan::prepareAggregateVars(
       TRI_ASSERT(!Aggregator::requiresInput(func->name));
     }
     aggregateVariables.emplace_back(
-        AggregateVarInfo{outVar, variable, std::string(functionName)});
+        AggregateVarInfo{outVar, {variable}, std::string(functionName)});
   }
 
   return aggregateVariables;

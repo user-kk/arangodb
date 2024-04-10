@@ -155,7 +155,7 @@ struct AggregatorLength final : public Aggregator {
 
   void reset() override { count = 0; }
 
-  void reduce(AqlValue const&) override { ++count; }
+  void reduce(VPackFunctionParametersView) override { ++count; }
 
   AqlValue get() const override {
     uint64_t value = count;
@@ -173,7 +173,8 @@ struct AggregatorMin final : public Aggregator {
 
   void reset() override { value.erase(); }
 
-  void reduce(AqlValue const& cmpValue) override {
+  void reduce(VPackFunctionParametersView parameters) override {
+    AqlValue const& cmpValue = extractFunctionParameterValue(parameters, 0);
     if (!cmpValue.isNull(true) &&
         (value.isEmpty() ||
          AqlValue::Compare(_vpackOptions, value, cmpValue, true) > 0)) {
@@ -202,7 +203,8 @@ struct AggregatorMinWith final : public Aggregator {
 
   void reset() override { value.erase(); }
 
-  void reduce(AqlValue const& cmpValue) override {
+  void reduce(VPackFunctionParametersView parameters) override {
+    AqlValue const& cmpValue = extractFunctionParameterValue(parameters, 0);
     if (!cmpValue.isNull(true) &&
         (value.isEmpty() ||
          AqlValue::Compare(_vpackOptions, value, cmpValue, true) > 0)) {
@@ -231,7 +233,8 @@ struct AggregatorMax final : public Aggregator {
 
   void reset() override { value.erase(); }
 
-  void reduce(AqlValue const& cmpValue) override {
+  void reduce(VPackFunctionParametersView parameters) override {
+    AqlValue const& cmpValue = extractFunctionParameterValue(parameters, 0);
     if (value.isEmpty() ||
         AqlValue::Compare(_vpackOptions, value, cmpValue, true) < 0) {
       value.destroy();
@@ -259,7 +262,8 @@ struct AggregatorSum final : public Aggregator {
     invoked = false;
   }
 
-  void reduce(AqlValue const& cmpValue) override {
+  void reduce(VPackFunctionParametersView parameters) override {
+    AqlValue const& cmpValue = extractFunctionParameterValue(parameters, 0);
     if (!invalid) {
       invoked = true;
       if (cmpValue.isNull(true)) {
@@ -303,7 +307,8 @@ struct AggregatorAverage : public Aggregator {
     invalid = false;
   }
 
-  virtual void reduce(AqlValue const& cmpValue) override {
+  void reduce(VPackFunctionParametersView parameters) override {
+    AqlValue const& cmpValue = extractFunctionParameterValue(parameters, 0);
     if (!invalid) {
       if (cmpValue.isNull(true)) {
         // ignore `null` values here
@@ -369,7 +374,8 @@ struct AggregatorAverageStep2 final : public AggregatorAverage {
   explicit AggregatorAverageStep2(velocypack::Options const* opts)
       : AggregatorAverage(opts) {}
 
-  void reduce(AqlValue const& cmpValue) override {
+  void reduce(VPackFunctionParametersView parameters) override {
+    AqlValue const& cmpValue = extractFunctionParameterValue(parameters, 0);
     if (!cmpValue.isArray()) {
       invalid = true;
       return;
@@ -412,7 +418,8 @@ struct AggregatorVarianceBase : public Aggregator {
     invalid = false;
   }
 
-  void reduce(AqlValue const& cmpValue) override {
+  void reduce(VPackFunctionParametersView parameters) override {
+    AqlValue const& cmpValue = extractFunctionParameterValue(parameters, 0);
     if (!invalid) {
       if (cmpValue.isNull(true)) {
         // ignore `null` values here
@@ -502,7 +509,8 @@ struct AggregatorVarianceBaseStep2 : public AggregatorVarianceBase {
     values.clear();
   }
 
-  void reduce(AqlValue const& cmpValue) override {
+  void reduce(VPackFunctionParametersView parameters) override {
+    AqlValue const& cmpValue = extractFunctionParameterValue(parameters, 0);
     if (!cmpValue.isArray()) {
       invalid = true;
       return;
@@ -641,7 +649,8 @@ struct AggregatorUnique : public Aggregator {
     allocator.clear();
   }
 
-  void reduce(AqlValue const& cmpValue) override {
+  void reduce(VPackFunctionParametersView parameters) override {
+    AqlValue const& cmpValue = extractFunctionParameterValue(parameters, 0);
     AqlValueMaterializer materializer(_vpackOptions);
 
     VPackSlice s = materializer.slice(cmpValue);
@@ -684,7 +693,8 @@ struct AggregatorUniqueStep2 final : public AggregatorUnique {
   explicit AggregatorUniqueStep2(velocypack::Options const* opts)
       : AggregatorUnique(opts) {}
 
-  void reduce(AqlValue const& cmpValue) override final {
+  void reduce(VPackFunctionParametersView parameters) override final {
+    AqlValue const& cmpValue = extractFunctionParameterValue(parameters, 0);
     AqlValueMaterializer materializer(_vpackOptions);
 
     VPackSlice s = materializer.slice(cmpValue);
@@ -724,7 +734,8 @@ struct AggregatorSortedUnique : public Aggregator {
     builder.clear();
   }
 
-  void reduce(AqlValue const& cmpValue) override {
+  void reduce(VPackFunctionParametersView parameters) override {
+    AqlValue const& cmpValue = extractFunctionParameterValue(parameters, 0);
     AqlValueMaterializer materializer(_vpackOptions);
 
     VPackSlice s = materializer.slice(cmpValue);
@@ -759,7 +770,8 @@ struct AggregatorSortedUniqueStep2 final : public AggregatorSortedUnique {
   explicit AggregatorSortedUniqueStep2(velocypack::Options const* opts)
       : AggregatorSortedUnique(opts) {}
 
-  void reduce(AqlValue const& cmpValue) override final {
+  void reduce(VPackFunctionParametersView parameters) override final {
+    AqlValue const& cmpValue = extractFunctionParameterValue(parameters, 0);
     AqlValueMaterializer materializer(_vpackOptions);
 
     VPackSlice s = materializer.slice(cmpValue);
@@ -795,7 +807,8 @@ struct AggregatorCountDistinct : public Aggregator {
     allocator.clear();
   }
 
-  void reduce(AqlValue const& cmpValue) override {
+  void reduce(VPackFunctionParametersView parameters) override {
+    AqlValue const& cmpValue = extractFunctionParameterValue(parameters, 0);
     AqlValueMaterializer materializer(_vpackOptions);
 
     VPackSlice s = materializer.slice(cmpValue);
@@ -856,7 +869,8 @@ struct AggregatorCountDistinctStep2 final : public AggregatorCountDistinct {
   explicit AggregatorCountDistinctStep2(velocypack::Options const* opts)
       : AggregatorCountDistinct(opts) {}
 
-  void reduce(AqlValue const& cmpValue) override {
+  void reduce(VPackFunctionParametersView parameters) override {
+    AqlValue const& cmpValue = extractFunctionParameterValue(parameters, 0);
     AqlValueMaterializer materializer(_vpackOptions);
 
     VPackSlice s = materializer.slice(cmpValue);
@@ -906,7 +920,8 @@ struct AggregatorBitFunction : public Aggregator, BitFunction {
     invoked = false;
   }
 
-  void reduce(AqlValue const& cmpValue) override {
+  void reduce(VPackFunctionParametersView parameters) override {
+    AqlValue const& cmpValue = extractFunctionParameterValue(parameters, 0);
     if (!invalid) {
       if (cmpValue.isNull(true)) {
         // ignore `null` values here

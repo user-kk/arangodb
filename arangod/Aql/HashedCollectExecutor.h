@@ -40,6 +40,7 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace arangodb {
 struct ResourceMonitor;
@@ -80,7 +81,8 @@ class HashedCollectExecutorInfos {
       Variable const* expressionVariable,
       std::vector<std::string> aggregateTypes,
       std::vector<std::pair<std::string, RegisterId>>&& inputVariables,
-      std::vector<std::pair<RegisterId, RegisterId>>&& aggregateRegisters,
+      std::vector<std::pair<RegisterId, std::vector<RegisterId>>>&&
+          aggregateRegisters,
       velocypack::Options const* vpackOptions,
       arangodb::ResourceMonitor& resourceMonitor);
 
@@ -92,8 +94,8 @@ class HashedCollectExecutorInfos {
  public:
   std::vector<std::pair<RegisterId, RegisterId>> const& getGroupRegisters()
       const;
-  std::vector<std::pair<RegisterId, RegisterId>> const& getAggregatedRegisters()
-      const;
+  std::vector<std::pair<RegisterId, std::vector<RegisterId>>> const&
+  getAggregatedRegisters() const;
   std::vector<std::string> const& getAggregateTypes() const;
   velocypack::Options const* getVPackOptions() const;
   RegisterId getCollectRegister() const noexcept;
@@ -113,7 +115,8 @@ class HashedCollectExecutorInfos {
 
   /// @brief pairs, consisting of out register and in register
   // 聚集的输入reg,输出reg
-  std::vector<std::pair<RegisterId, RegisterId>> _aggregateRegisters;
+  std::vector<std::pair<RegisterId, std::vector<RegisterId>>>
+      _aggregateRegisters;
 
   /// @brief pairs, consisting of out register and in register
   // group_by的输入reg,输出reg

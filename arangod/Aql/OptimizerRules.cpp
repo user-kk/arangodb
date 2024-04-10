@@ -1605,7 +1605,7 @@ void arangodb::aql::removeCollectVariablesRule(
           modified = true;
         }
       }  // end - if doOptimize
-    }    // end - if collectNode has outVariable
+    }  // end - if collectNode has outVariable
 
     size_t numGroupVariables = collectNode->groupVariables().size();
     size_t numAggregateVariables = collectNode->aggregateVariables().size();
@@ -3639,10 +3639,9 @@ auto extractVocbaseFromNode(ExecutionNode* at) -> TRI_vocbase_t* {
 //
 // In an ideal world the node itself would know how to compute these parameters
 // for GatherNode (sortMode, parallelism, and elements), and we'd just ask it.
-auto insertGatherNode(
-    ExecutionPlan& plan, ExecutionNode* node,
-    SmallUnorderedMap<ExecutionNode*, ExecutionNode*> const& subqueries)
-    -> GatherNode* {
+auto insertGatherNode(ExecutionPlan& plan, ExecutionNode* node,
+                      SmallUnorderedMap<ExecutionNode*, ExecutionNode*> const&
+                          subqueries) -> GatherNode* {
   TRI_ASSERT(node);
 
   GatherNode* gatherNode{nullptr};
@@ -3940,9 +3939,8 @@ void arangodb::aql::scatterInClusterRule(Optimizer* opt,
 
 // Create a new DistributeNode for the ExecutionNode passed in node, and
 // register it with the plan
-auto arangodb::aql::createDistributeNodeFor(ExecutionPlan& plan,
-                                            ExecutionNode* node)
-    -> DistributeNode* {
+auto arangodb::aql::createDistributeNodeFor(
+    ExecutionPlan& plan, ExecutionNode* node) -> DistributeNode* {
   auto collection = static_cast<Collection const*>(nullptr);
   auto inputVariable = static_cast<Variable const*>(nullptr);
 
@@ -4073,10 +4071,9 @@ auto arangodb::aql::createGatherNodeFor(ExecutionPlan& plan,
 // and we handle this case in here as well by resetting the root to the
 // inserted GATHER node.
 //
-auto arangodb::aql::insertDistributeGatherSnippet(ExecutionPlan& plan,
-                                                  ExecutionNode* at,
-                                                  SubqueryNode* snode)
-    -> DistributeNode* {
+auto arangodb::aql::insertDistributeGatherSnippet(
+    ExecutionPlan& plan, ExecutionNode* at,
+    SubqueryNode* snode) -> DistributeNode* {
   auto const parents = at->getParents();
   auto const deps = at->getDependencies();
 
@@ -4301,7 +4298,7 @@ void arangodb::aql::distributeInClusterRule(Optimizer* opt,
         node = node->getFirstDependency();
       }
     }  // for node in subquery
-  }    // for end subquery in plan
+  }  // for end subquery in plan
   opt->addPlan(std::move(plan), rule, wasModified);
 }
 
@@ -4454,7 +4451,7 @@ void arangodb::aql::collectInClusterRule(Optimizer* opt,
                 plan->getAst()->variables()->createTemporaryVariable();
             std::vector<AggregateVarInfo> aggregateVariables;
             aggregateVariables.emplace_back(AggregateVarInfo{
-                outVariable, collectNode->aggregateVariables()[0].inVar,
+                outVariable, collectNode->aggregateVariables()[0].inVars,
                 "LENGTH"});
             auto dbCollectNode = plan->createNode<CollectNode>(
                 plan.get(), plan->nextId(), collectNode->getOptions(),
@@ -4471,7 +4468,7 @@ void arangodb::aql::collectInClusterRule(Optimizer* opt,
             // re-use the existing CollectNode on the coordinator to aggregate
             // the counts of the DB servers
             collectNode->aggregateVariables()[0].type = "SUM";
-            collectNode->aggregateVariables()[0].inVar = outVariable;
+            collectNode->aggregateVariables()[0].inVars.push_back(outVariable);
             collectNode->aggregationMethod(
                 CollectOptions::CollectMethod::SORTED);
 
@@ -4529,7 +4526,7 @@ void arangodb::aql::collectInClusterRule(Optimizer* opt,
               auto outVariable =
                   plan->getAst()->variables()->createTemporaryVariable();
               dbServerAggVars.emplace_back(
-                  AggregateVarInfo{outVariable, it.inVar, std::string(func)});
+                  AggregateVarInfo{outVariable, it.inVars, std::string(func)});
             }
 
             if (!eligible) {
@@ -4573,7 +4570,7 @@ void arangodb::aql::collectInClusterRule(Optimizer* opt,
 
             size_t j = 0;
             for (AggregateVarInfo& it : collectNode->aggregateVariables()) {
-              it.inVar = dbServerAggVars[j].outVar;
+              it.inVars.push_back(dbServerAggVars[j].outVar);
               it.type = Aggregator::runOnCoordinatorAs(it.type);
               ++j;
             }
@@ -6772,7 +6769,7 @@ static bool distanceFuncArgCheck(ExecutionPlan* plan, AstNode const* latArg,
         return true;
       }
     }  // if isGeo 1 or 2
-  }    // for index in collection
+  }  // for index in collection
   return false;
 }
 

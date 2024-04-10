@@ -124,8 +124,7 @@ SortedCollectExecutorInfos::SortedCollectExecutorInfos(
     RegisterId collectRegister, RegisterId expressionRegister,
     Variable const* expressionVariable, std::vector<std::string> aggregateTypes,
     std::vector<std::pair<std::string, RegisterId>>&& inputVariables,
-    std::vector<std::pair<RegisterId, std::vector<RegisterId>>>&&
-        aggregateRegisters,
+    std::vector<std::pair<RegisterId, RegisterIdsType>>&& aggregateRegisters,
     velocypack::Options const* opts)
     : _aggregateTypes(std::move(aggregateTypes)),
       _aggregateRegisters(std::move(aggregateRegisters)),
@@ -157,7 +156,7 @@ void SortedCollectExecutor::CollectGroup::addLine(
     TRI_ASSERT(!this->aggregators.empty());
     TRI_ASSERT(infos.getAggregatedRegisters().size() > j);
 
-    std::vector<RegisterId> regs = infos.getAggregatedRegisters()[j].second;
+    RegisterIdsType regs = infos.getAggregatedRegisters()[j].second;
     VPackFunctionParameters params;
     for (auto i : regs) {
       if (i.value() == RegisterId::maxRegisterId) {

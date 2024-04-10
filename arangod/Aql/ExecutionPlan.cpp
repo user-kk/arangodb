@@ -2848,7 +2848,7 @@ std::vector<AggregateVarInfo> ExecutionPlan::prepareAggregateVars(
     // validated before)
     TRI_ASSERT(args->type == NODE_TYPE_ARRAY);
     std::string_view functionName = Aggregator::translateAlias(func->name);
-    std::vector<Variable const*> variables;
+    InVarsType variables;
     if (args->numMembers() == 1) {
       auto arg = args->getMember(0);
       if (arg->type == NODE_TYPE_REFERENCE) {

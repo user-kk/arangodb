@@ -200,8 +200,7 @@ void CollectNode::calcGroupRegisters(
 }
 
 void CollectNode::calcAggregateRegisters(
-    std::vector<std::pair<RegisterId, std::vector<RegisterId>>>&
-        aggregateRegisters,
+    std::vector<std::pair<RegisterId, RegisterIdsType>>& aggregateRegisters,
     RegIdSet& readableInputRegisters,
     RegIdSet& writeableOutputRegisters) const {
   for (auto const& p : _aggregateVariables) {
@@ -212,7 +211,7 @@ void CollectNode::calcAggregateRegisters(
     RegisterId outReg = itOut->second.registerId;
     TRI_ASSERT(outReg.isValid());
 
-    std::vector<RegisterId> inRegs;
+    RegisterIdsType inRegs;
     inRegs.reserve(p.inVars.size());
 
     if (Aggregator::requiresInput(p.type)) {
@@ -286,8 +285,7 @@ std::unique_ptr<ExecutionBlock> CollectNode::createBlock(
                          writeableOutputRegisters);
 
       // calculate the aggregate registers
-      std::vector<std::pair<RegisterId, std::vector<RegisterId>>>
-          aggregateRegisters;
+      std::vector<std::pair<RegisterId, RegisterIdsType>> aggregateRegisters;
       calcAggregateRegisters(aggregateRegisters, readableInputRegisters,
                              writeableOutputRegisters);
 
@@ -336,8 +334,7 @@ std::unique_ptr<ExecutionBlock> CollectNode::createBlock(
                          writeableOutputRegisters);
 
       // calculate the aggregate registers
-      std::vector<std::pair<RegisterId, std::vector<RegisterId>>>
-          aggregateRegisters;
+      std::vector<std::pair<RegisterId, RegisterIdsType>> aggregateRegisters;
       calcAggregateRegisters(aggregateRegisters, readableInputRegisters,
                              writeableOutputRegisters);
 

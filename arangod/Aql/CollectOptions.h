@@ -26,6 +26,7 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include "Containers/SmallVector.h"
 
 namespace arangodb {
 namespace velocypack {
@@ -33,7 +34,9 @@ class Builder;
 class Slice;
 }  // namespace velocypack
 namespace aql {
+
 struct Variable;
+using InVarsType = containers::SmallVector<Variable const*, 2>;
 
 /// @brief CollectOptions
 struct CollectOptions final {
@@ -75,7 +78,7 @@ struct GroupVarInfo final {
 
 struct AggregateVarInfo final {
   Variable const* outVar;
-  std::vector<Variable const*> inVars;
+  InVarsType inVars;
   std::string type;
 };
 

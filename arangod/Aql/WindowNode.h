@@ -45,6 +45,7 @@ struct Aggregator;
 class ExecutionBlock;
 class ExecutionPlan;
 class QueryWarnings;
+using RegisterIdsType = containers::SmallVector<RegisterId, 2>;
 
 /// utility class to calculate window bounds for Row / Range based windows
 /// could probably also be part of the executor
@@ -115,8 +116,7 @@ class WindowNode : public ExecutionNode {
 
   /// @brief calculate the aggregate registers
   void calcAggregateRegisters(
-      std::vector<std::pair<RegisterId, std::vector<RegisterId>>>&
-          aggregateRegisters,
+      std::vector<std::pair<RegisterId, RegisterIdsType>>& aggregateRegisters,
       RegIdSet& readableInputRegisters,
       RegIdSet& writeableOutputRegisters) const;
 

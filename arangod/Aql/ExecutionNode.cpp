@@ -359,8 +359,7 @@ ExecutionNode* ExecutionNode::fromVPackFactory(ExecutionPlan* plan,
               Variable::varsFromVPack(plan->getAst(), it, "inVariable", true);
 
           std::string const type = it.get("type").copyString();
-          std::vector<const Variable*> constInVars(inVars.begin(),
-                                                   inVars.end());
+          InVarsType constInVars(inVars.begin(), inVars.end());
           aggregateVariables.emplace_back(
               AggregateVarInfo{outVar, constInVars, type});
         }
@@ -457,8 +456,7 @@ ExecutionNode* ExecutionNode::fromVPackFactory(ExecutionPlan* plan,
               Variable::varsFromVPack(plan->getAst(), it, "inVariable", true);
 
           std::string const type = it.get("type").copyString();
-          std::vector<const Variable*> constInVars(inVars.begin(),
-                                                   inVars.end());
+          InVarsType constInVars(inVars.begin(), inVars.end());
           aggregateVariables.emplace_back(
               AggregateVarInfo{outVar, constInVars, type});
         }

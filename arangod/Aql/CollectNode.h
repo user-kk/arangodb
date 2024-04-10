@@ -26,6 +26,7 @@
 #include "Aql/CollectOptions.h"
 #include "Aql/ExecutionNode.h"
 #include "Aql/ExecutionNodeId.h"
+#include "Containers/SmallVector.h"
 
 #include <cstdint>
 #include <functional>
@@ -41,6 +42,7 @@ namespace aql {
 class ExecutionBlock;
 class ExecutionPlan;
 struct Aggregator;
+using RegisterIdsType = containers::SmallVector<RegisterId, 2>;
 
 /// @brief class CollectNode
 class CollectNode : public ExecutionNode {
@@ -108,8 +110,7 @@ class CollectNode : public ExecutionNode {
 
   /// @brief calculate the aggregate registers
   void calcAggregateRegisters(
-      std::vector<std::pair<RegisterId, std::vector<RegisterId>>>&
-          aggregateRegisters,
+      std::vector<std::pair<RegisterId, RegisterIdsType>>& aggregateRegisters,
       RegIdSet& readableInputRegisters,
       RegIdSet& writeableOutputRegisters) const;
 

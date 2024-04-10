@@ -53,8 +53,7 @@ HashedCollectExecutorInfos::HashedCollectExecutorInfos(
     RegisterId collectRegister, RegisterId expressionRegister,
     Variable const* expressionVariable, std::vector<std::string> aggregateTypes,
     std::vector<std::pair<std::string, RegisterId>>&& inputVariables,
-    std::vector<std::pair<RegisterId, std::vector<RegisterId>>>&&
-        aggregateRegisters,
+    std::vector<std::pair<RegisterId, RegisterIdsType>>&& aggregateRegisters,
     velocypack::Options const* opts, arangodb::ResourceMonitor& resourceMonitor)
     : _aggregateTypes(aggregateTypes),
       _aggregateRegisters(aggregateRegisters),
@@ -73,7 +72,7 @@ HashedCollectExecutorInfos::getGroupRegisters() const {
   return _groupRegisters;
 }
 
-std::vector<std::pair<RegisterId, std::vector<RegisterId>>> const&
+std::vector<std::pair<RegisterId, RegisterIdsType>> const&
 HashedCollectExecutorInfos::getAggregatedRegisters() const {
   return _aggregateRegisters;
 }

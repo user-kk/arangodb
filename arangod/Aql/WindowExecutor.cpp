@@ -46,8 +46,7 @@ static const AqlValue EmptyValue;
 WindowExecutorInfos::WindowExecutorInfos(
     WindowBounds const& bounds, RegisterId rangeRegister,
     std::vector<std::string> aggregateTypes,
-    std::vector<std::pair<RegisterId, std::vector<RegisterId>>>&&
-        aggregateRegisters,
+    std::vector<std::pair<RegisterId, RegisterIdsType>>&& aggregateRegisters,
     QueryWarnings& w, velocypack::Options const* opts)
     : _bounds(bounds),
       _rangeRegister(rangeRegister),
@@ -62,7 +61,7 @@ WindowBounds const& WindowExecutorInfos::bounds() const { return _bounds; }
 
 RegisterId WindowExecutorInfos::rangeRegister() const { return _rangeRegister; }
 
-std::vector<std::pair<RegisterId, std::vector<RegisterId>>>
+std::vector<std::pair<RegisterId, RegisterIdsType>>
 WindowExecutorInfos::getAggregatedRegisters() const {
   return _aggregateRegisters;
 }

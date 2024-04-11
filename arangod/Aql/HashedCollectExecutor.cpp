@@ -141,9 +141,11 @@ void HashedCollectExecutor::destroyAllGroupsAqlValues() {
     }
   }
   memoryUsage += _memoryUsageForInto;
+  memoryUsage += _memoryUsageForAggregate;
 
   _infos.getResourceMonitor().decreaseMemoryUsage(memoryUsage);
   _memoryUsageForInto = 0;
+  _memoryUsageForAggregate = 0;
 }
 
 void HashedCollectExecutor::consumeInputRow(InputAqlItemRow& input) {
@@ -169,8 +171,19 @@ void HashedCollectExecutor::consumeInputRow(InputAqlItemRow& input) {
           params.push_back(input.getValue(i));
         }
       }
+      if ((*aggregateValues)[j].needDynamicMemory()) {
+        auto& k =
+            static_cast<AggregatorNeedDynamicMemory&>((*aggregateValues)[j]);
+        k.setContext(_infos.getVPackOptions());
+      }
       // 进行聚集
       (*aggregateValues)[j].reduce(params);
+      if ((*aggregateValues)[j].needDynamicMemory()) {
+        auto& k =
+            static_cast<AggregatorNeedDynamicMemory&>((*aggregateValues)[j]);
+        _memoryUsageForAggregate += k.getMemoryUsage();
+        _infos.getResourceMonitor().increaseMemoryUsage(k.getMemoryUsage());
+      }
       ++j;
     }
   }

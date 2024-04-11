@@ -27,6 +27,7 @@
 #include "Containers/SmallVector.h"
 #include "Aql/Functions.h"
 
+#include <cstddef>
 #include <functional>
 #include <memory>
 #include <string>
@@ -58,6 +59,7 @@ struct Aggregator {
   virtual void reset() = 0;
   virtual void reduce(VPackFunctionParametersView) = 0;
   virtual AqlValue get() const = 0;
+  virtual bool needDynamicMemory() { return false; }
   AqlValue stealValue() {
     AqlValue r = this->get();
     this->reset();
@@ -108,6 +110,23 @@ struct Aggregator {
 
  protected:
   velocypack::Options const* _vpackOptions;
+};
+struct AggregatorNeedDynamicMemory : Aggregator {
+ public:
+  using Aggregator::Aggregator;
+  bool needDynamicMemory() override { return true; }
+  void setContext(velocypack::Options const* vpackOption) {
+    _vpackOption = vpackOption;
+  }
+  size_t getMemoryUsage() { return _memoryUsage; }
+
+ protected:
+  velocypack::Options const* _vpackOption = nullptr;
+  mutable size_t _memoryUsage = 0;
+  void clear() {
+    _vpackOption = nullptr;
+    _memoryUsage = 0;
+  }
 };
 
 }  // namespace aql

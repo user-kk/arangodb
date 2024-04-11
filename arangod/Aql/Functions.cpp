@@ -10444,4 +10444,9 @@ aql::AqlValue functions::MinHashMatch(aql::ExpressionContext* ctx,
                                       std::span<aql::AqlValue const> values) {
   return NotImplementedEE(ctx, node, values);
 }
+aql::AqlValue functions::GetGroup(aql::ExpressionContext*, aql::AstNode const&,
+                           std::span<aql::AqlValue const>){
+  THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
+                                   "getGroup() must be invoked as aggregate function");
+}
 #endif

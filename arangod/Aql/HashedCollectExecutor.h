@@ -272,6 +272,8 @@ class HashedCollectExecutor {
   size_t _returnedGroups = 0;
 
   size_t _memoryUsageForInto;
+
+  size_t _memoryUsageForAggregate = 0;
 };
 
 }  // namespace aql

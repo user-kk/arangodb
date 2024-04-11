@@ -36,6 +36,8 @@
 #include <velocypack/Iterator.h>
 #include <velocypack/Slice.h>
 
+#include <cstddef>
+#include <memory>
 #include <set>
 
 using namespace arangodb;
@@ -195,16 +197,18 @@ struct AggregatorMin final : public Aggregator {
   AqlValue value;
 };
 
-struct AggregatorMinWith final : public Aggregator {
+struct AggregatorMinWith final : public AggregatorNeedDynamicMemory {
   explicit AggregatorMinWith(velocypack::Options const* opts)
-      : Aggregator(opts), minValue() {}
+      : AggregatorNeedDynamicMemory(opts), minValue() {}
 
   ~AggregatorMinWith() {
+    AggregatorNeedDynamicMemory::clear();
     minValue.destroy();
     destoryMinWithValue();
   }
 
   void reset() override {
+    AggregatorNeedDynamicMemory::clear();
     minValue.erase();
     destoryMinWithValue();
   }
@@ -238,11 +242,13 @@ struct AggregatorMinWith final : public Aggregator {
       return AqlValue(AqlValueHintNull());
     }
     VPackBuilder builder;
+    size_t previousSize = builder.buffer()->size();
     builder.openArray();
     for (auto& i : minWithValue) {
-      i.toVelocyPack(nullptr, builder, true);
+      i.toVelocyPack(_vpackOption, builder, false);
     }
     builder.close();
+    _memoryUsage += builder.buffer()->size() - previousSize;
     return AqlValue(builder.slice(), builder.size());
   }
 
@@ -256,16 +262,18 @@ struct AggregatorMinWith final : public Aggregator {
   }
 };
 
-struct AggregatorMaxWith final : public Aggregator {
+struct AggregatorMaxWith final : public AggregatorNeedDynamicMemory {
   explicit AggregatorMaxWith(velocypack::Options const* opts)
-      : Aggregator(opts), maxValue() {}
+      : AggregatorNeedDynamicMemory(opts), maxValue() {}
 
   ~AggregatorMaxWith() {
+    AggregatorNeedDynamicMemory::clear();
     maxValue.destroy();
     destoryMinWithValue();
   }
 
   void reset() override {
+    AggregatorNeedDynamicMemory::clear();
     maxValue.erase();
     destoryMinWithValue();
   }
@@ -282,7 +290,7 @@ struct AggregatorMaxWith final : public Aggregator {
       destoryMinWithValue();
       maxWithValue.push_back(withValue.clone());
     } else {
-      int ret = AqlValue::Compare(_vpackOptions, maxValue, cmpValue, true);
+      int ret = AqlValue::Compare(_vpackOption, maxValue, cmpValue, true);
       if (ret < 0) {
         maxValue.destroy();
         maxValue = cmpValue.clone();
@@ -299,11 +307,13 @@ struct AggregatorMaxWith final : public Aggregator {
       return AqlValue(AqlValueHintNull());
     }
     VPackBuilder builder;
+    size_t previousSize = builder.buffer()->size();
     builder.openArray();
     for (auto& i : maxWithValue) {
       i.toVelocyPack(nullptr, builder, true);
     }
     builder.close();
+    _memoryUsage += builder.buffer()->size() - previousSize;
     return AqlValue(builder.slice(), builder.size());
   }
 
@@ -316,7 +326,37 @@ struct AggregatorMaxWith final : public Aggregator {
     maxWithValue.clear();
   }
 };
+struct AggregatorGetGroup final : public AggregatorNeedDynamicMemory {
+  explicit AggregatorGetGroup(velocypack::Options const* opts)
+      : AggregatorNeedDynamicMemory(opts) {
+    builder.openArray();
+  }
 
+  ~AggregatorGetGroup() {
+    AggregatorNeedDynamicMemory::clear();
+    builder.clear();
+  }
+
+  void reset() override {
+    AggregatorNeedDynamicMemory::clear();
+    builder.clear();
+    builder.openArray();
+  }
+
+  void reduce(VPackFunctionParametersView parameters) override {
+    AqlValue const& value = extractFunctionParameterValue(parameters, 0);
+    size_t previousSize = builder.buffer()->size();
+    value.toVelocyPack(_vpackOption, builder, false);
+    _memoryUsage += builder.buffer()->size() - previousSize;
+  }
+
+  AqlValue get() const override {
+    builder.close();
+    return AqlValue(builder.slice(), builder.size());
+  }
+
+  mutable VPackBuilder builder;
+};
 struct AggregatorMax final : public Aggregator {
   explicit AggregatorMax(velocypack::Options const* opts)
       : Aggregator(opts), value() {}
@@ -1173,7 +1213,9 @@ std::unordered_map<std::string_view, AggregatorInfo> const aggregators = {
     {"BIT_XOR",
      {std::make_shared<GenericFactory<AggregatorBitXOr>>(), doesRequireInput,
       official, "BIT_XOR", "BIT_XOR"}},
-};
+    {"GET_GROUP",
+     {std::make_shared<GenericFactory<AggregatorGetGroup>>(), doesRequireInput,
+      official, "GET_GROUP", "GET_GROUP"}}};
 
 /// @brief aliases (user-visible) for aggregation functions
 std::unordered_map<std::string_view, std::string_view> const aliases = {

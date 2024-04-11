@@ -598,6 +598,9 @@ aql::AqlValue MinHashCount(aql::ExpressionContext*, aql::AstNode const&,
 aql::AqlValue MinHashMatch(aql::ExpressionContext*, aql::AstNode const&,
                            std::span<aql::AqlValue const>);
 
+aql::AqlValue GetGroup(aql::ExpressionContext*, aql::AstNode const&,
+                           std::span<aql::AqlValue const>);
+
 /// @brief maximum precision for bit operations
 constexpr uint64_t bitFunctionsMaxSupportedBits = 32;
 constexpr uint64_t bitFunctionsMaxSupportedValue =

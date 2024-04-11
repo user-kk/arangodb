@@ -65,6 +65,7 @@ class AqlFunctionFeature final : public ArangodFeature {
   void addGeometryConstructors();
   void addDateFunctions();
   void addMiscFunctions();
+  void addAggregateFunctions();
 
   /// @brief AQL user-callable function names
   std::unordered_map<std::string, Function const> _functionNames;

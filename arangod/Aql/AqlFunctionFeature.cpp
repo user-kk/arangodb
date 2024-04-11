@@ -63,6 +63,7 @@ void AqlFunctionFeature::prepare() {
   addGeometryConstructors();
   addDateFunctions();
   addMiscFunctions();
+  addAggregateFunctions();
 }
 
 void AqlFunctionFeature::add(Function const& func) {
@@ -615,6 +616,9 @@ void AqlFunctionFeature::addMiscFunctions() {
   add({"INTERNAL", "", Function::makeFlags(FF::Internal),
        &functions::NotImplemented});
 }
-
+///@warning the functions only can be invoked as aggregate function
+void AqlFunctionFeature::addAggregateFunctions() {
+  add({"GET_GROUP", ".", Function::makeFlags(), &functions::GetGroup});
+};
 }  // namespace aql
 }  // namespace arangodb

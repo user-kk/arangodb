@@ -27,6 +27,7 @@
 #include <deque>
 #include <string_view>
 #include <unordered_map>
+#include <vector>
 #include "Aql/Ast.h"
 #include "Aql/AstNode.h"
 #include "Aql/Collection.h"
@@ -161,24 +162,13 @@ class Parser {
     sqlContext()._willReturnNode = static_cast<AstNode*>(this->peekStack());
   }
 
-  void beginHaving() { sqlContext()._having = true; }
-
-  void endHaving(AstNode* expr) {
-    sqlContext()._having = false;
-    sqlContext()._havingExprssionNode = expr;
-  }
+  void setHaving(AstNode* expr) { sqlContext()._havingExprssionNode = expr; }
 
   bool isSelect() {
     if (_sqlContext.empty()) {
       return false;
     }
     return sqlContext()._isSelect;
-  }
-  bool isHaving() {
-    if (_sqlContext.empty()) {
-      return false;
-    }
-    return sqlContext()._having;
   }
   bool isSelectSubQuery() {
     if (_sqlContext.empty()) {
@@ -195,10 +185,6 @@ class Parser {
 
   void pushSelectPending(AstNode* p, std::string_view s) {
     sqlContext()._selectPendingQueue.push_back({p, s});
-  }
-
-  void pushHavingPending(AstNode* p, std::string_view s) {
-    sqlContext()._havingPendingQueue.push_back({p, s});
   }
 
   void pushAliasQueue(AstNode* p, std::string_view s) {
@@ -227,7 +213,14 @@ class Parser {
   void executeSelectPendWithoutPop();
 
   /// @brief 生成别名的let节点
+  /// @warning 聚集函数不会在这个阶段显式生成let节点,防止其在where子句中被引用
   void produceAlias();
+
+  /// @brief 生成聚集函数别名的let节点
+  /// @details 聚集函数的别名应该被在having中使用,在进入having子句之前,
+  /// 需要调用produceAggregateStep1(),产生变量,但不产生let子句节点
+  /// 在collect节点生成后需要调用此函数来产生let子句节点
+  void produceAggAlias();
 
   /// @brief 生成select中的嵌套子查询
   void produceSelectSubQuery();
@@ -236,11 +229,13 @@ class Parser {
   /// @param  assignNode group_by产生的赋值节点
   void updateWillReturnNode(AstNode* assignNode);
 
-  AstNode* produceAggregate();
+  ///@brief 产生SQLContext的_aggArrayNode节点
+  /// 用于处理select中调用的聚集函数，同时生成聚集函数的别名
+  ///@warning 只生成变量，不生成let节点，let节点要在collect节点生成后生成
+  void produceAggregateStep1();
 
-  /// @brief 将待判定的节点变成collection节点或variableRef节点
-  /// @warning 这个会清空判定队列
-  void executeHavingPend();
+  ///@brief 用于处理having中调用的聚集函数，返回aggArrayNode节点
+  AstNode* produceAggregateStep2();
 
   void disableNULLAlia() { sqlContext()._allowNULLAlia = false; }
 
@@ -326,21 +321,17 @@ class Parser {
   std::vector<void*> _stack;
 
   struct SQLContext {
-    /// @brief
-    /// 变量映射到在select子句中直接引用该变量的表达式(处理group_by时使用)
+    /// @brief 变量映射到在select子句中直接引用该变量的表达式
+    /// @details 处理group_by时使用
     std::unordered_map<Variable*, AstNode*> _selectMap;
-    ///@brief 调用了聚集函数的字段的别名和其对应的聚集变量(处理having时使用)
-    std::unordered_map<std::string_view, Variable*> _aggAliasToVar;
-
+    ///@brief 暂存聚集函数别名的let节点,collect节点生成后将要被添加到ast中
+    std::vector<AstNode*> _aggAliasLetNodes;
     bool _isSelect = false;
-    bool _having = false;
     bool _isSelectSubQuery = false;  // 是否是select中嵌套的子查询
     bool _allowNULLAlia = true;      // select是否允许空别名
     bool _usedNULLAlia = false;      // 空别名是否被使用
     ///@brief 用于替换select子句中的表达式
     std::deque<std::pair<AstNode*, std::string_view>> _selectPendingQueue;
-    ///@brief 用于替换having子句中的表达式
-    std::deque<std::pair<AstNode*, std::string_view>> _havingPendingQueue;
     ///@brief 用于替换select子句子查询中的表达式
     std::deque<std::pair<AstNode*, std::string_view>>
         _selectSubQueryPendingQueue;
@@ -348,6 +339,9 @@ class Parser {
     AstNode* _willReturnNode = nullptr;
     ///@brief 记录当前having表达式的节点
     AstNode* _havingExprssionNode = nullptr;
+    ///@brief 将要被放入collect节点中的聚集数组节点
+    ///@details 由produceAggregateStep1()生成
+    AstNode* _aggArrayNode = nullptr;
     ///@brief 用于生成let子句(处理select子句中的别名)
     std::deque<std::pair<AstNode*, std::string_view>> _selectAliasQueue;
     ///@brief 用于生成select子查询中的let子句(延迟生成select子句中的子查询)

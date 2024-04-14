@@ -326,7 +326,12 @@ void arangodb::aql::Parser::produceAlias() {
   SQLContext& ctx = sqlContext();
   for (auto [exprNode, name] : ctx._selectAliasQueue) {
     if (exprNode->type == NODE_TYPE_FCALL) {
-      continue;
+      // 现在找到了f_call的节点,检查是否是聚集函数
+      auto f = static_cast<arangodb::aql::Function*>(exprNode->getData());
+      if (Aggregator::isValid(f->name)) {
+        continue;  // 聚集函数不产生别名
+      }
+      // 普通函数生成别名
     }
 
     Variable* vPtr = nullptr;
@@ -336,7 +341,7 @@ void arangodb::aql::Parser::produceAlias() {
     _ast.addOperation(node);
   }
   ctx._selectAliasQueue.clear();
-};
+}
 
 void arangodb::aql::Parser::executeSelectPendWithoutPop() {
   SQLContext& ctx = sqlContext();
@@ -368,9 +373,9 @@ void arangodb::aql::Parser::executeSelectPendWithoutPop() {
 
     *pendingNode = *node;
   }
-};
+}
 
-arangodb::aql::AstNode* arangodb::aql::Parser::produceAggregate() {
+void arangodb::aql::Parser::produceAggregateStep1() {
   // 聚集函数的节点和它的别名
   std::unordered_map<AstNode*, std::string_view> map;
   SQLContext& ctx = sqlContext();
@@ -412,6 +417,10 @@ arangodb::aql::AstNode* arangodb::aql::Parser::produceAggregate() {
         return true;
       },
       [](AstNode* p) { return p->type == NODE_TYPE_SUBQUERY; });
+
+  /// 调用了聚集函数的字段的别名和其对应的聚集变量
+  std::unordered_map<std::string_view, Variable*> aggAliasToVar;
+
   for (AstNode* fNode : fAggNodes) {
     // 现在确定了是聚集函数
     AstNode* fAggNode = fNode->clone(&_ast);
@@ -427,13 +436,25 @@ arangodb::aql::AstNode* arangodb::aql::Parser::produceAggregate() {
     // 修改
     Variable* var = static_cast<Variable*>(assignNode->members[0]->getData());
     if (map.contains(fNode)) {
-      ctx._aggAliasToVar.insert({map[fNode], var});
+      aggAliasToVar.insert({map[fNode], var});
     }
     AstNode* refNode = _ast.createNodeReference(var);
     removeSQLCollectionFromRoot(fNode);
     *fNode = *refNode;
   }
+  ctx._aggAliasLetNodes.reserve(aggAliasToVar.size());
 
+  for (auto [vName, var] : aggAliasToVar) {
+    AstNode* refNode = _ast.createNodeReference(var);
+    ctx._aggAliasLetNodes.push_back(_ast.createNodeLet(vName, refNode, true));
+  }
+
+  ctx._aggArrayNode = aggArrayNode;
+};
+
+arangodb::aql::AstNode* arangodb::aql::Parser::produceAggregateStep2() {
+  SQLContext& ctx = sqlContext();
+  AstNode* aggArrayNode = ctx._aggArrayNode;
   if (ctx._havingExprssionNode == nullptr) {
     return aggArrayNode;
   }
@@ -468,64 +489,26 @@ arangodb::aql::AstNode* arangodb::aql::Parser::produceAggregate() {
     // 修改
     Variable* var = static_cast<Variable*>(assignNode->members[0]->getData());
     AstNode* refNode = _ast.createNodeReference(var);
+    removeSQLCollectionFromRoot(fNode);
     *fNode = *refNode;
   }
 
   return aggArrayNode;
-};
+}
 
-void arangodb::aql::Parser::executeHavingPend() {
-  AstNode* pendingNode = nullptr;
-  SQLContext& ctx = sqlContext();
-  while (!ctx._havingPendingQueue.empty()) {
-    pendingNode = ctx._havingPendingQueue.front().first;
-
-    std::string_view variableName = ctx._havingPendingQueue.front().second;
-    auto variable = _ast.scopes()->getVariable(variableName, true);
-
-    if (variable == nullptr) {
-      // variable does not exist
-      // now try special variables
-      if (this->checkVariableNameIsCurrent(variableName)) {
-        variable = _ast.scopes()->getCurrentVariable();
-      }
-    }
-    AstNode* node = nullptr;
-    if (variable != nullptr) {
-      // variable alias exists, now use it
-      node = _ast.createNodeReference(variable);
-    }
-    // 为collection时
-    if (node == nullptr) {
-      if (ctx._aggAliasToVar.contains(variableName)) {  // 检测是否是聚集变量
-        auto v = ctx._aggAliasToVar[variableName];
-        node = _ast.createNodeReference(v);
-      } else {
-        // variable not found. so it must have been a collection or view
-        auto const& resolver = this->query().resolver();
-        node = _ast.createNodeDataSource(resolver, variableName,
-                                         arangodb::AccessMode::Type::READ, true,
-                                         false, true);
-      }
-    }
-
-    TRI_ASSERT(node != nullptr);
-
-    *pendingNode = *node;
-    ctx._havingPendingQueue.pop_front();
-  }
-};
 void arangodb::aql::Parser::kk() {
   TRI_ASSERT(!_sqlContext.empty());
   return;
-};
+}
+
 void arangodb::aql::Parser::produceSelectSubQuery() {
   auto& ctx = sqlContext();
   for (auto node : ctx._selectSubQueryQueue) {
     _ast.addOperation(node);
   }
   ctx._selectSubQueryQueue.clear();
-};
+}
+
 void arangodb::aql::Parser::executeSelectSubQueryPend() {
   AstNode* pendingNode = nullptr;
   SQLContext& ctx = sqlContext();
@@ -562,4 +545,12 @@ void arangodb::aql::Parser::executeSelectSubQueryPend() {
     *pendingNode = *node;
     ctx._selectSubQueryPendingQueue.pop_front();
   }
-};
+}
+
+void arangodb::aql::Parser::produceAggAlias() {
+  SQLContext& ctx = sqlContext();
+  for (auto i : ctx._aggAliasLetNodes) {
+    _ast.addOperation(i);
+  }
+  ctx._aggAliasLetNodes.clear();
+}

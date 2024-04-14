@@ -2200,9 +2200,6 @@ reference:
       if(parser->isSelect()){
         parser->pushSelectPending(node,std::string_view{$1.value, $1.length});
       }
-      if(parser->isHaving()){
-        parser->pushHavingPending(node,std::string_view{$1.value, $1.length});
-      }
       
       $$ = node;
     }
@@ -2722,7 +2719,8 @@ where_statements:
 group_by_statements:
     /* empty */ {
       //检查是否有聚集
-      AstNode* aggNode=parser->produceAggregate();
+      parser->produceAggregateStep1();
+      AstNode* aggNode=parser->produceAggregateStep2();
       if(aggNode->numMembers()!=0){ //有聚集函数,创建聚集
         VarSet variablesIntroduced{};
         auto scopes = parser->ast()->scopes();
@@ -2738,10 +2736,10 @@ group_by_statements:
       }
 
     }
-  | group_by_variable_list { parser->beginHaving(); }having_statements {
+  | group_by_variable_list {parser->produceAggregateStep1();} having_statements {
 
-      parser->endHaving($3);
-      AstNode* aggNode=parser->produceAggregate();
+      parser->setHaving($3);
+      AstNode* aggNode=parser->produceAggregateStep2();
 
       auto scopes = parser->ast()->scopes();
       VarSet variablesIntroduced{};
@@ -2758,7 +2756,7 @@ group_by_statements:
 
       //处理having
       if($3!=nullptr){
-        parser->executeHavingPend();
+        parser->produceAggAlias();
         auto filterNode = parser->ast()->createNodeFilter($3);
         parser->ast()->addOperation(filterNode);
       }

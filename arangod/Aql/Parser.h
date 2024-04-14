@@ -28,6 +28,9 @@
 #include <string_view>
 #include <unordered_map>
 #include "Aql/Ast.h"
+#include "Aql/AstNode.h"
+#include "Aql/Collection.h"
+#include "Aql/QueryContext.h"
 #include "Aql/Variable.h"
 #include "Assertions/Assert.h"
 #include "Basics/Common.h"
@@ -146,6 +149,7 @@ class Parser {
     bool isSelectSubQuery = isSelect();
     _sqlContext.push_back({});
     sqlContext()._isSelectSubQuery = isSelectSubQuery;
+    setSQL();
   }
 
   void endSQL() { _sqlContext.pop_back(); }
@@ -156,9 +160,6 @@ class Parser {
     sqlContext()._isSelect = false;
     sqlContext()._willReturnNode = static_cast<AstNode*>(this->peekStack());
   }
-
-  void beginWhere() { sqlContext()._isWhere = true; }
-  void endWhere() { sqlContext()._isWhere = false; }
 
   void beginHaving() { sqlContext()._having = true; }
 
@@ -186,12 +187,12 @@ class Parser {
     return sqlContext()._isSelectSubQuery;
   }
 
-  bool isWhere() {
-    if (_sqlContext.empty()) {
-      return false;
-    }
-    return sqlContext()._isWhere;
-  }
+  bool isSQL() { return _isSQL; }
+
+  void setSQL() { _isSQL = true; }
+
+  void setAQL() { _isSQL = false; }
+
   void pushSelectPending(AstNode* p, std::string_view s) {
     sqlContext()._selectPendingQueue.push_back({p, s});
   }
@@ -216,7 +217,6 @@ class Parser {
 
   /// @brief 将待判定的节点变成collection节点或variableRef节点
   /// @warning 这个会清空判定队列和select_map
-  /// @warning 这个不会向ast的collection中添加新的表
   void executeSelectPend();
 
   /// @brief 将待判定的节点变成collection节点或variableRef节点
@@ -262,6 +262,27 @@ class Parser {
   }
 
   void kk();
+
+  void addSQLCollectionNode(AstNode* p) { _sqlCollectionNodes.insert(p); }
+
+  void addSQLCollection() {
+    for (auto i : _sqlCollectionNodes) {
+      if (i != nullptr && i->type == NODE_TYPE_COLLECTION) {
+        _ast.query().collections().add(i->getString(),
+                                       arangodb::AccessMode::Type::READ,
+                                       aql::Collection::Hint::None);
+      }
+    }
+    _sqlCollectionNodes.clear();
+  }
+  void removeSQLCollectionFromRoot(AstNode* root) {
+    std::vector<AstNode*> needRemove = root->find(
+        [this](AstNode* p) { return _sqlCollectionNodes.contains(p); },
+        [](AstNode* p) { return p->type == NODE_TYPE_SUBQUERY; });
+    for (auto i : needRemove) {
+      _sqlCollectionNodes.erase(i);
+    }
+  }
 
  private:
   struct SQLContext;
@@ -314,9 +335,8 @@ class Parser {
     bool _isSelect = false;
     bool _having = false;
     bool _isSelectSubQuery = false;  // 是否是select中嵌套的子查询
-    bool _isWhere = false;
-    bool _allowNULLAlia = true;  // select是否允许空别名
-    bool _usedNULLAlia = false;  // 空别名是否被使用
+    bool _allowNULLAlia = true;      // select是否允许空别名
+    bool _usedNULLAlia = false;      // 空别名是否被使用
     ///@brief 用于替换select子句中的表达式
     std::deque<std::pair<AstNode*, std::string_view>> _selectPendingQueue;
     ///@brief 用于替换having子句中的表达式
@@ -334,7 +354,9 @@ class Parser {
     std::deque<AstNode*> _selectSubQueryQueue;
   };
 
+  std::unordered_set<AstNode*> _sqlCollectionNodes;
   std::deque<SQLContext> _sqlContext;
+  bool _isSQL = false;
 };
 }  // namespace aql
 }  // namespace arangodb

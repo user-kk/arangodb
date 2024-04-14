@@ -123,6 +123,7 @@ void Parser::parse() {
   }
 
   TRI_ASSERT(scopes->numActive() == 0);
+  addSQLCollection();
 }
 
 /// @brief parse the query and retun parse details
@@ -299,6 +300,7 @@ void Parser::updateWillReturnNode(AstNode* assignNode) {
       Variable* collectVar =
           static_cast<Variable*>(assignNode->members[0]->getData());
       AstNode* refNode = _ast.createNodeReference(collectVar);
+      removeSQLCollectionFromRoot(ctx._selectMap[v]);
       *(ctx._selectMap[v]) = *refNode;
     } else {
       // TODO:报错
@@ -311,6 +313,7 @@ void Parser::updateWillReturnNode(AstNode* assignNode) {
       Variable* collectVar =
           static_cast<Variable*>(assignNode->members[0]->getData());
       AstNode* refNode = _ast.createNodeReference(collectVar);
+      removeSQLCollectionFromRoot(node);
       *node = *refNode;
     }
     if (needReplace.empty()) {
@@ -358,7 +361,7 @@ void arangodb::aql::Parser::executeSelectPendWithoutPop() {
       auto const& resolver = this->query().resolver();
       node = _ast.createNodeDataSource(resolver, variableName,
                                        arangodb::AccessMode::Type::READ, true,
-                                       false);
+                                       false, true);
     }
 
     TRI_ASSERT(node != nullptr);
@@ -427,6 +430,7 @@ arangodb::aql::AstNode* arangodb::aql::Parser::produceAggregate() {
       ctx._aggAliasToVar.insert({map[fNode], var});
     }
     AstNode* refNode = _ast.createNodeReference(var);
+    removeSQLCollectionFromRoot(fNode);
     *fNode = *refNode;
   }
 
@@ -501,7 +505,7 @@ void arangodb::aql::Parser::executeHavingPend() {
         auto const& resolver = this->query().resolver();
         node = _ast.createNodeDataSource(resolver, variableName,
                                          arangodb::AccessMode::Type::READ, true,
-                                         false);
+                                         false, true);
       }
     }
 
@@ -550,7 +554,7 @@ void arangodb::aql::Parser::executeSelectSubQueryPend() {
       auto const& resolver = this->query().resolver();
       node = _ast.createNodeDataSource(resolver, variableName,
                                        arangodb::AccessMode::Type::READ, true,
-                                       false);
+                                       false, true);
     }
 
     TRI_ASSERT(node != nullptr);

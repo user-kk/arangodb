@@ -685,6 +685,7 @@ final_statement:
 
 optional_statement_block_statements:
     /* empty */ {
+      parser->setAQL();
     }
   | optional_statement_block_statements statement_block_statement {
     }
@@ -2186,7 +2187,10 @@ reference:
       if (node == nullptr) {//为collection时
         // variable not found. so it must have been a collection or view
         auto const& resolver = parser->query().resolver();
-        node = ast->createNodeDataSource(resolver, variableName, arangodb::AccessMode::Type::READ, true, false,parser->isSelect()||parser->isHaving()||(parser->isSelectSubQuery()&&parser->isWhere()));
+        node = ast->createNodeDataSource(resolver, variableName, arangodb::AccessMode::Type::READ, true, false,parser->isSQL());
+        if(parser->isSQL()){
+          parser->addSQLCollectionNode(node);
+        }
         if(parser->isSelectSubQuery()){
           parser->pushSelectSubQueryPending(node,std::string_view{$1.value, $1.length});
         }
@@ -2708,9 +2712,9 @@ select_element:
 where_statements:
     /* empty */ {
     }
-  | T_WHERE {parser->beginWhere();} expression {parser->endWhere();} {
+  | T_WHERE expression {
       // operand is a reference. can use it directly
-      auto node = parser->ast()->createNodeFilter($3);
+      auto node = parser->ast()->createNodeFilter($2);
       parser->ast()->addOperation(node);
     }
   ;

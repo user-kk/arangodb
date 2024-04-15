@@ -396,6 +396,11 @@ void arangodb::aql::Parser::produceAggregateStep1() {
       continue;
     }
 
+    // select临时生成的别名不会被加入map
+    if (objectElementNode->getStringView() == "_") {
+      continue;
+    }
+
     // 将是聚集函数的节点和它的别名保存起来
     map.insert({fNode, objectElementNode->getStringView()});
   }

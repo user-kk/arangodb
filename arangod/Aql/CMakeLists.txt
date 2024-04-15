@@ -70,6 +70,7 @@ add_library(arango_aql STATIC
   FixedVarExpressionContext.cpp
   Function.cpp
   Functions.cpp
+  FunctionsExtra.cpp
   GraphNode.cpp
   GraphOptimizerRules.cpp
   HashedCollectExecutor.cpp

@@ -22,6 +22,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "Functions.h"
+#include <cstddef>
+#include <set>
 #include <vector>
 
 #include "ApplicationFeatures/ApplicationServer.h"
@@ -5503,7 +5505,7 @@ AqlValue functions::MinWith(ExpressionContext* expressionContext,
   VPackSlice withSlice = materializer.slice(withValue);
 
   if (slice.length() != withSlice.length()) {
-    registerWarning(expressionContext, "MIN",
+    registerWarning(expressionContext, "MINWITH",
                     TRI_ERROR_QUERY_FUNCTION_RUNTIME_ERROR);
     return AqlValue(AqlValueHintNull());
   }
@@ -10445,8 +10447,9 @@ aql::AqlValue functions::MinHashMatch(aql::ExpressionContext* ctx,
   return NotImplementedEE(ctx, node, values);
 }
 aql::AqlValue functions::GetGroup(aql::ExpressionContext*, aql::AstNode const&,
-                           std::span<aql::AqlValue const>){
-  THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
-                                   "getGroup() must be invoked as aggregate function");
+                                  std::span<aql::AqlValue const>) {
+  THROW_ARANGO_EXCEPTION_MESSAGE(
+      TRI_ERROR_QUERY_PARSE,
+      "getGroup() must be invoked as aggregate function");
 }
 #endif

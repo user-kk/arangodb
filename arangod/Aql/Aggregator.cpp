@@ -37,8 +37,12 @@
 #include <velocypack/Slice.h>
 
 #include <cstddef>
+#include <functional>
+#include <iterator>
 #include <memory>
 #include <set>
+#include <utility>
+#include <vector>
 
 using namespace arangodb;
 using namespace arangodb::aql;
@@ -326,6 +330,288 @@ struct AggregatorMaxWith final : public AggregatorNeedDynamicMemory {
     maxWithValue.clear();
   }
 };
+
+struct AggregatorMinN final : public AggregatorNeedDynamicMemory {
+  explicit AggregatorMinN(velocypack::Options const* opts)
+      : AggregatorNeedDynamicMemory(opts) {}
+
+  ~AggregatorMinN() {
+    AggregatorNeedDynamicMemory::clear();
+    destorySet();
+  }
+
+  void reset() override {
+    AggregatorNeedDynamicMemory::clear();
+    destorySet();
+  }
+
+  void reduce(VPackFunctionParametersView parameters) override {
+    AqlValue const& cmpValue = extractFunctionParameterValue(parameters, 0);
+    AqlValue const& nValue = extractFunctionParameterValue(parameters, 1);
+
+    if (cmpValue.isNull(true) || !nValue.isNumber() || nValue.toInt64() <= 0) {
+      return;
+    }
+    size_t n = static_cast<size_t>(nValue.toInt64());
+    if (minSet.size() >= n) {
+      if (this->cmp(cmpValue, *minSet.rbegin())) {  // it < set中最大的数
+        minSet.insert(cmpValue.clone());
+        auto i = --minSet.end();
+        AqlValue v = (*i);  // 得到要被删除的元素
+        minSet.erase(i);
+        v.destroy();  // 销毁AqlValue指向的内存
+      }
+    } else {
+      minSet.insert(cmpValue.clone());
+    }
+  }
+
+  AqlValue get() const override {
+    if (minSet.empty()) {
+      return AqlValue(AqlValueHintNull());
+    }
+    VPackBuilder builder;
+    size_t previousSize = builder.buffer()->size();
+    builder.openArray();
+    for (auto& i : minSet) {
+      i.toVelocyPack(_vpackOption, builder, false);
+    }
+    builder.close();
+    _memoryUsage += builder.buffer()->size() - previousSize;
+    return AqlValue(builder.slice(), builder.size());
+  }
+  void destorySet() {
+    std::vector<AqlValue> values(minSet.begin(), minSet.end());
+    minSet.clear();
+    for (auto& i : values) {
+      i.destroy();
+    }
+  }
+
+  std::function<bool(const AqlValue&, const AqlValue&)> cmp{
+      [this](const AqlValue& lhs, const AqlValue& rhs) {
+        return AqlValue::Compare(_vpackOptions, lhs, rhs, true) < 0;
+      }};
+  std::set<AqlValue, std::function<bool(const AqlValue&, const AqlValue&)>>
+      minSet{cmp};
+};
+
+struct AggregatorMaxN final : public AggregatorNeedDynamicMemory {
+  explicit AggregatorMaxN(velocypack::Options const* opts)
+      : AggregatorNeedDynamicMemory(opts) {}
+
+  ~AggregatorMaxN() {
+    AggregatorNeedDynamicMemory::clear();
+    destorySet();
+  }
+
+  void reset() override {
+    AggregatorNeedDynamicMemory::clear();
+    destorySet();
+  }
+
+  void reduce(VPackFunctionParametersView parameters) override {
+    AqlValue const& cmpValue = extractFunctionParameterValue(parameters, 0);
+    AqlValue const& nValue = extractFunctionParameterValue(parameters, 1);
+
+    if (cmpValue.isNull(true) || !nValue.isNumber() || nValue.toInt64() <= 0) {
+      return;
+    }
+    size_t n = static_cast<size_t>(nValue.toInt64());
+    if (maxSet.size() >= n) {
+      if (this->cmp(cmpValue, *maxSet.rbegin())) {  // it > set中最小的数
+        maxSet.insert(cmpValue.clone());
+        auto i = --maxSet.end();
+        AqlValue v = (*i);  // 得到要被删除的元素
+        maxSet.erase(i);
+        v.destroy();  // 销毁AqlValue指向的内存
+      }
+    } else {
+      maxSet.insert(cmpValue.clone());
+    }
+  }
+
+  AqlValue get() const override {
+    if (maxSet.empty()) {
+      return AqlValue(AqlValueHintNull());
+    }
+    VPackBuilder builder;
+    size_t previousSize = builder.buffer()->size();
+    builder.openArray();
+    for (auto& i : maxSet) {
+      i.toVelocyPack(_vpackOption, builder, false);
+    }
+    builder.close();
+    _memoryUsage += builder.buffer()->size() - previousSize;
+    return AqlValue(builder.slice(), builder.size());
+  }
+  void destorySet() {
+    std::vector<AqlValue> values(maxSet.begin(), maxSet.end());
+    maxSet.clear();
+    for (auto& i : values) {
+      i.destroy();
+    }
+  }
+
+  std::function<bool(const AqlValue&, const AqlValue&)> cmp{
+      [this](const AqlValue& lhs, const AqlValue& rhs) {
+        return AqlValue::Compare(_vpackOptions, lhs, rhs, true) > 0;
+      }};
+  std::set<AqlValue, std::function<bool(const AqlValue&, const AqlValue&)>>
+      maxSet{cmp};
+};
+
+struct AggregatorMinNWith final : public AggregatorNeedDynamicMemory {
+  explicit AggregatorMinNWith(velocypack::Options const* opts)
+      : AggregatorNeedDynamicMemory(opts) {}
+
+  ~AggregatorMinNWith() {
+    AggregatorNeedDynamicMemory::clear();
+    destorySet();
+  }
+
+  void reset() override {
+    AggregatorNeedDynamicMemory::clear();
+    destorySet();
+  }
+
+  void reduce(VPackFunctionParametersView parameters) override {
+    AqlValue const& cmpValue = extractFunctionParameterValue(parameters, 0);
+    AqlValue const& nValue = extractFunctionParameterValue(parameters, 1);
+    AqlValue const& withValue = extractFunctionParameterValue(parameters, 2);
+
+    if (cmpValue.isNull(true) || withValue.isNull(true) || !nValue.isNumber() ||
+        nValue.toInt64() <= 0) {
+      return;
+    }
+    size_t n = static_cast<size_t>(nValue.toInt64());
+    ElemType cmpPair = std::make_pair(cmpValue, withValue);
+    if (minSet.size() >= n) {
+      if (this->cmp(cmpPair, *minSet.rbegin())) {  // it < set中最大的数
+        ElemType cmpPairClone =
+            std::make_pair(cmpValue.clone(), withValue.clone());
+        minSet.insert(cmpPairClone);
+        auto i = --minSet.end();
+        ElemType v = (*i);  // 得到要被删除的元素
+        minSet.erase(i);
+        // 销毁AqlValue指向的内存
+        v.first.destroy();
+        v.second.destroy();
+      }
+    } else {
+      ElemType cmpPairClone =
+          std::make_pair(cmpValue.clone(), withValue.clone());
+      minSet.insert(cmpPairClone);
+    }
+  }
+
+  AqlValue get() const override {
+    if (minSet.empty()) {
+      return AqlValue(AqlValueHintNull());
+    }
+    VPackBuilder builder;
+    size_t previousSize = builder.buffer()->size();
+    builder.openArray();
+    for (auto& i : minSet) {
+      i.second.toVelocyPack(_vpackOption, builder, false);
+    }
+    builder.close();
+    _memoryUsage += builder.buffer()->size() - previousSize;
+    return AqlValue(builder.slice(), builder.size());
+  }
+  void destorySet() {
+    std::vector<ElemType> values(minSet.begin(), minSet.end());
+    minSet.clear();
+    for (auto& [first, second] : values) {
+      first.destroy();
+      second.destroy();
+    }
+  }
+  using ElemType = std::pair<AqlValue, AqlValue>;
+
+  std::function<bool(const ElemType&, const ElemType&)> cmp{
+      [this](const ElemType& lhs, const ElemType& rhs) {
+        return AqlValue::Compare(_vpackOptions, lhs.first, rhs.first, true) < 0;
+      }};
+  std::set<ElemType, std::function<bool(const ElemType&, const ElemType&)>>
+      minSet{cmp};
+};
+struct AggregatorMaxNWith final : public AggregatorNeedDynamicMemory {
+  explicit AggregatorMaxNWith(velocypack::Options const* opts)
+      : AggregatorNeedDynamicMemory(opts) {}
+
+  ~AggregatorMaxNWith() {
+    AggregatorNeedDynamicMemory::clear();
+    destorySet();
+  }
+
+  void reset() override {
+    AggregatorNeedDynamicMemory::clear();
+    destorySet();
+  }
+
+  void reduce(VPackFunctionParametersView parameters) override {
+    AqlValue const& cmpValue = extractFunctionParameterValue(parameters, 0);
+    AqlValue const& nValue = extractFunctionParameterValue(parameters, 1);
+    AqlValue const& withValue = extractFunctionParameterValue(parameters, 2);
+
+    if (cmpValue.isNull(true) || withValue.isNull(true) || !nValue.isNumber() ||
+        nValue.toInt64() <= 0) {
+      return;
+    }
+    size_t n = static_cast<size_t>(nValue.toInt64());
+    ElemType cmpPair = std::make_pair(cmpValue, withValue);
+    if (maxSet.size() >= n) {
+      if (this->cmp(cmpPair, *maxSet.rbegin())) {  // it > set中最小的数
+        ElemType cmpPairClone =
+            std::make_pair(cmpValue.clone(), withValue.clone());
+        maxSet.insert(cmpPairClone);
+        auto i = --maxSet.end();
+        ElemType v = (*i);  // 得到要被删除的元素
+        maxSet.erase(i);
+        // 销毁AqlValue指向的内存
+        v.first.destroy();
+        v.second.destroy();
+      }
+    } else {
+      ElemType cmpPairClone =
+          std::make_pair(cmpValue.clone(), withValue.clone());
+      maxSet.insert(cmpPairClone);
+    }
+  }
+
+  AqlValue get() const override {
+    if (maxSet.empty()) {
+      return AqlValue(AqlValueHintNull());
+    }
+    VPackBuilder builder;
+    size_t previousSize = builder.buffer()->size();
+    builder.openArray();
+    for (auto& i : maxSet) {
+      i.second.toVelocyPack(_vpackOption, builder, false);
+    }
+    builder.close();
+    _memoryUsage += builder.buffer()->size() - previousSize;
+    return AqlValue(builder.slice(), builder.size());
+  }
+  void destorySet() {
+    std::vector<ElemType> values(maxSet.begin(), maxSet.end());
+    maxSet.clear();
+    for (auto& [first, second] : values) {
+      first.destroy();
+      second.destroy();
+    }
+  }
+  using ElemType = std::pair<AqlValue, AqlValue>;
+
+  std::function<bool(const ElemType&, const ElemType&)> cmp{
+      [this](const ElemType& lhs, const ElemType& rhs) {
+        return AqlValue::Compare(_vpackOptions, lhs.first, rhs.first, true) > 0;
+      }};
+  std::set<ElemType, std::function<bool(const ElemType&, const ElemType&)>>
+      maxSet{cmp};
+};
+
 struct AggregatorGetGroup final : public AggregatorNeedDynamicMemory {
   explicit AggregatorGetGroup(velocypack::Options const* opts)
       : AggregatorNeedDynamicMemory(opts) {
@@ -1118,15 +1404,27 @@ std::unordered_map<std::string_view, AggregatorInfo> const aggregators = {
     {"MIN",
      {std::make_shared<GenericFactory<AggregatorMin>>(), doesRequireInput,
       official, "MIN", "MIN"}},  // min is commutative
+    {"MIN_N",
+     {std::make_shared<GenericFactory<AggregatorMinN>>(), doesRequireInput,
+      official, "MIN_N", "MIN_N"}},  // min is commutative
     {"MIN_WITH",
      {std::make_shared<GenericFactory<AggregatorMinWith>>(), doesRequireInput,
       official, "MIN_WITH", "MIN_WITH"}},  // min is commutative
+    {"MIN_N_WITH",
+     {std::make_shared<GenericFactory<AggregatorMinNWith>>(), doesRequireInput,
+      official, "MIN_N_WITH", "MIN_N_WITH"}},  // min is commutative
     {"MAX",
      {std::make_shared<GenericFactory<AggregatorMax>>(), doesRequireInput,
       official, "MAX", "MAX"}},  // max is commutative
+    {"MAX_N",
+     {std::make_shared<GenericFactory<AggregatorMaxN>>(), doesRequireInput,
+      official, "MAX_N", "MAX_N"}},  // max is commutative
     {"MAX_WITH",
      {std::make_shared<GenericFactory<AggregatorMaxWith>>(), doesRequireInput,
       official, "MAX_WITH", "MAX_WITH"}},  // max is commutative
+    {"MAX_N_WITH",
+     {std::make_shared<GenericFactory<AggregatorMaxNWith>>(), doesRequireInput,
+      official, "MAX_N_WITH", "MAX_N_WITH"}},  // max is commutative
     {"SUM",
      {std::make_shared<GenericFactory<AggregatorSum>>(), doesRequireInput,
       official, "SUM", "SUM"}},  // sum is commutative

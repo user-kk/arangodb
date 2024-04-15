@@ -299,10 +299,18 @@ AqlValue Min(arangodb::aql::ExpressionContext*, AstNode const&,
              VPackFunctionParametersView);
 AqlValue MinWith(arangodb::aql::ExpressionContext*, AstNode const&,
                  VPackFunctionParametersView);
+AqlValue MinN(arangodb::aql::ExpressionContext*, AstNode const&,
+              VPackFunctionParametersView);
+AqlValue MinNWith(arangodb::aql::ExpressionContext*, AstNode const&,
+                  VPackFunctionParametersView);
 AqlValue Max(arangodb::aql::ExpressionContext*, AstNode const&,
              VPackFunctionParametersView);
 AqlValue MaxWith(arangodb::aql::ExpressionContext*, AstNode const&,
                  VPackFunctionParametersView);
+AqlValue MaxN(arangodb::aql::ExpressionContext*, AstNode const&,
+              VPackFunctionParametersView);
+AqlValue MaxNWith(arangodb::aql::ExpressionContext*, AstNode const&,
+                  VPackFunctionParametersView);
 AqlValue Sum(arangodb::aql::ExpressionContext*, AstNode const&,
              VPackFunctionParametersView);
 AqlValue Average(arangodb::aql::ExpressionContext*, AstNode const&,
@@ -599,7 +607,7 @@ aql::AqlValue MinHashMatch(aql::ExpressionContext*, aql::AstNode const&,
                            std::span<aql::AqlValue const>);
 
 aql::AqlValue GetGroup(aql::ExpressionContext*, aql::AstNode const&,
-                           std::span<aql::AqlValue const>);
+                       std::span<aql::AqlValue const>);
 
 /// @brief maximum precision for bit operations
 constexpr uint64_t bitFunctionsMaxSupportedBits = 32;

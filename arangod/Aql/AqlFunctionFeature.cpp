@@ -321,10 +321,18 @@ void AqlFunctionFeature::addListFunctions() {
   addAlias("ARRAY_MIN", "MIN");
   add({"MIN_WITH", ".,.", flags, &functions::MinWith});
   addAlias("ARRAY_MIN_WITH", "MIN_WITH");
+  add({"MIN_N", ".,.", flags, &functions::MinN});
+  addAlias("ARRAY_MIN_N", "MIN_N");
+  add({"MIN_N_WITH", ".,.,.", flags, &functions::MinNWith});
+  addAlias("ARRAY_MIN_N_WITH", "MIN_N_WITH");
   add({"MAX", ".", flags, &functions::Max});
   addAlias("ARRAY_MAX", "MAX");
   add({"MAX_WITH", ".,.", flags, &functions::MaxWith});
   addAlias("ARRAY_MAX_WITH", "MAX_WITH");
+  add({"MAX_N", ".,.", flags, &functions::MaxN});
+  addAlias("ARRAY_MAX_N", "MAX_N");
+  add({"MAX_N_WITH", ".,.,.", flags, &functions::MaxNWith});
+  addAlias("ARRAY_MAX_N_WITH", "MAX_N_WITH");
   add({"SUM", ".", flags, &functions::Sum});
   addAlias("ARRAY_SUM", "SUM");
   add({"MEDIAN", ".", flags, &functions::Median});

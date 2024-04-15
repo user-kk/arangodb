@@ -1850,21 +1850,6 @@ AstNode* Ast::createNodeAggregateFunctionCall(std::string_view functionName,
   TRI_ASSERT(arguments != nullptr);
   TRI_ASSERT(arguments->type == NODE_TYPE_ARRAY);
 
-  if (Aggregator::requiresInput(normalized)) {
-    // validate number of function call arguments
-    size_t numExpectedArguments =
-        1;  // at the moment all aggregators take only a single argument
-    if (arguments->numMembers() != numExpectedArguments) {
-      std::string temp(functionName);
-      THROW_ARANGO_EXCEPTION_PARAMS(
-          TRI_ERROR_QUERY_FUNCTION_ARGUMENT_NUMBER_MISMATCH, temp.c_str(), 1,
-          1);
-    }
-  }
-
-  // TODO - we should consider to introduce a NODE_TYPE_AGGREATE_FCALL type
-  AstNode* node = createNode(NODE_TYPE_FCALL);
-
   // Register a pointer to the function.
   // However, this function is never called, but the function name is later
   // translated to an aggregator. This also implies that ATM we can only support
@@ -1872,6 +1857,24 @@ AstNode* Ast::createNodeAggregateFunctionCall(std::string_view functionName,
   auto& server = query().vocbase().server();
   auto func = server.getFeature<AqlFunctionFeature>().byName(normalized);
   TRI_ASSERT(func != nullptr);
+
+  // validate number of function call arguments
+  size_t const n = arguments->numMembers();
+
+  auto numExpectedArguments = func->numArguments();
+
+  if (n < numExpectedArguments.first || n > numExpectedArguments.second) {
+    // string_view is not necessarily null-terminated...
+    std::string const fname(functionName);
+    THROW_ARANGO_EXCEPTION_PARAMS(
+        TRI_ERROR_QUERY_FUNCTION_ARGUMENT_NUMBER_MISMATCH, fname.c_str(),
+        static_cast<int>(numExpectedArguments.first),
+        static_cast<int>(numExpectedArguments.second));
+  }
+
+  // TODO - we should consider to introduce a NODE_TYPE_AGGREATE_FCALL type
+  AstNode* node = createNode(NODE_TYPE_FCALL);
+
   node->setData(static_cast<void const*>(func));
 
   node->addMember(arguments);

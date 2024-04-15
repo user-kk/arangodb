@@ -392,7 +392,7 @@ struct AggregatorMinN final : public AggregatorNeedDynamicMemory {
       [this](const AqlValue& lhs, const AqlValue& rhs) {
         return AqlValue::Compare(_vpackOptions, lhs, rhs, true) < 0;
       }};
-  std::set<AqlValue, std::function<bool(const AqlValue&, const AqlValue&)>>
+  std::multiset<AqlValue, std::function<bool(const AqlValue&, const AqlValue&)>>
       minSet{cmp};
 };
 
@@ -457,7 +457,7 @@ struct AggregatorMaxN final : public AggregatorNeedDynamicMemory {
       [this](const AqlValue& lhs, const AqlValue& rhs) {
         return AqlValue::Compare(_vpackOptions, lhs, rhs, true) > 0;
       }};
-  std::set<AqlValue, std::function<bool(const AqlValue&, const AqlValue&)>>
+  std::multiset<AqlValue, std::function<bool(const AqlValue&, const AqlValue&)>>
       maxSet{cmp};
 };
 
@@ -533,7 +533,7 @@ struct AggregatorMinNWith final : public AggregatorNeedDynamicMemory {
       [this](const ElemType& lhs, const ElemType& rhs) {
         return AqlValue::Compare(_vpackOptions, lhs.first, rhs.first, true) < 0;
       }};
-  std::set<ElemType, std::function<bool(const ElemType&, const ElemType&)>>
+  std::multiset<ElemType, std::function<bool(const ElemType&, const ElemType&)>>
       minSet{cmp};
 };
 struct AggregatorMaxNWith final : public AggregatorNeedDynamicMemory {
@@ -608,7 +608,7 @@ struct AggregatorMaxNWith final : public AggregatorNeedDynamicMemory {
       [this](const ElemType& lhs, const ElemType& rhs) {
         return AqlValue::Compare(_vpackOptions, lhs.first, rhs.first, true) > 0;
       }};
-  std::set<ElemType, std::function<bool(const ElemType&, const ElemType&)>>
+  std::multiset<ElemType, std::function<bool(const ElemType&, const ElemType&)>>
       maxSet{cmp};
 };
 

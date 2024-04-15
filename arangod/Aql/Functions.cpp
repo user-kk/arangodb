@@ -5484,68 +5484,6 @@ AqlValue functions::Min(ExpressionContext* expressionContext, AstNode const&,
   }
   return AqlValue(minValue);
 }
-AqlValue functions::MinWith(ExpressionContext* expressionContext,
-                            AstNode const&,
-                            VPackFunctionParametersView parameters) {
-  AqlValue const& value = extractFunctionParameterValue(parameters, 0);
-  AqlValue const& withValue = extractFunctionParameterValue(parameters, 1);
-
-  if (!value.isArray() || !withValue.isArray()) {
-    // not an array
-    registerWarning(expressionContext, "MINWITH",
-                    TRI_ERROR_QUERY_ARRAY_EXPECTED);
-    return AqlValue(AqlValueHintNull());
-  }
-
-  transaction::Methods* trx = &expressionContext->trx();
-  auto* vopts = &trx->vpackOptions();
-
-  AqlValueMaterializer materializer(vopts);
-  VPackSlice slice = materializer.slice(value);
-  VPackSlice withSlice = materializer.slice(withValue);
-
-  if (slice.length() != withSlice.length()) {
-    registerWarning(expressionContext, "MINWITH",
-                    TRI_ERROR_QUERY_FUNCTION_RUNTIME_ERROR);
-    return AqlValue(AqlValueHintNull());
-  }
-
-  VPackSlice minValue;
-  std::vector<VPackSlice> minWithValues;
-  auto options = trx->transactionContextPtr()->getVPackOptions();
-
-  for (size_t i = 0; i < slice.length(); i++) {
-    VPackSlice it = slice.at(i);
-    if (it.isNull()) {
-      continue;
-    }
-    if (minValue.isNone()) {
-      minValue = it;
-      minWithValues.clear();
-      minWithValues.push_back(withSlice.at(i));
-    } else {
-      int ret = basics::VelocyPackHelper::compare(it, minValue, true, options);
-      if (ret < 0) {
-        minValue = it;
-        minWithValues.clear();
-        minWithValues.push_back(withSlice.at(i));
-      } else if (ret == 0) {
-        minWithValues.push_back(withSlice.at(i));
-      }
-    }
-  }
-  if (minWithValues.empty()) {
-    return AqlValue(AqlValueHintNull());
-  }
-  transaction::BuilderLeaser builder(trx);
-  builder->openArray();
-
-  for (auto i : minWithValues) {
-    builder->add(i.resolveExternal());
-  }
-  builder->close();
-  return AqlValue(builder->slice(), builder->size());
-}
 
 /// @brief function MAX
 AqlValue functions::Max(ExpressionContext* expressionContext, AstNode const&,
@@ -5575,69 +5513,6 @@ AqlValue functions::Max(ExpressionContext* expressionContext, AstNode const&,
     return AqlValue(AqlValueHintNull());
   }
   return AqlValue(maxValue);
-}
-
-AqlValue functions::MaxWith(ExpressionContext* expressionContext,
-                            AstNode const&,
-                            VPackFunctionParametersView parameters) {
-  AqlValue const& value = extractFunctionParameterValue(parameters, 0);
-  AqlValue const& withValue = extractFunctionParameterValue(parameters, 1);
-
-  if (!value.isArray() || !withValue.isArray()) {
-    // not an array
-    registerWarning(expressionContext, "MAXWITH",
-                    TRI_ERROR_QUERY_ARRAY_EXPECTED);
-    return AqlValue(AqlValueHintNull());
-  }
-
-  transaction::Methods* trx = &expressionContext->trx();
-  auto* vopts = &trx->vpackOptions();
-
-  AqlValueMaterializer materializer(vopts);
-  VPackSlice slice = materializer.slice(value);
-  VPackSlice withSlice = materializer.slice(withValue);
-
-  if (slice.length() != withSlice.length()) {
-    registerWarning(expressionContext, "MAXWITH",
-                    TRI_ERROR_QUERY_FUNCTION_RUNTIME_ERROR);
-    return AqlValue(AqlValueHintNull());
-  }
-
-  VPackSlice maxValue;
-  std::vector<VPackSlice> maxWithValues;
-  auto options = trx->transactionContextPtr()->getVPackOptions();
-
-  for (size_t i = 0; i < slice.length(); i++) {
-    VPackSlice it = slice.getNthValue(i);
-    if (it.isNull()) {
-      continue;
-    }
-    if (maxValue.isNone()) {
-      maxValue = it;
-      maxWithValues.clear();
-      maxWithValues.push_back(withSlice.getNthValue(i));
-    } else {
-      int ret = basics::VelocyPackHelper::compare(it, maxValue, true, options);
-      if (ret > 0) {
-        maxValue = it;
-        maxWithValues.clear();
-        maxWithValues.push_back(withSlice.getNthValue(i));
-      } else if (ret == 0) {
-        maxWithValues.push_back(withSlice.getNthValue(i));
-      }
-    }
-  }
-  if (maxWithValues.empty()) {
-    return AqlValue(AqlValueHintNull());
-  }
-  transaction::BuilderLeaser builder(trx);
-  builder->openArray();
-
-  for (auto i : maxWithValues) {
-    builder->add(i.resolveExternal());
-  }
-  builder->close();
-  return AqlValue(builder->slice(), builder->size());
 }
 
 /// @brief function SUM

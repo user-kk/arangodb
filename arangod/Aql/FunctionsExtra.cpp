@@ -1,4 +1,6 @@
+#include "Assertions/Assert.h"
 #include "Functions.h"
+#include <cassert>
 #include <cstddef>
 #include <set>
 #include <utility>
@@ -94,7 +96,7 @@ AqlValue functions::MinN(ExpressionContext* expressionContext, AstNode const&,
   auto cmp = [options](VPackSlice lhs, VPackSlice rhs) {
     return basics::VelocyPackHelper::compare(lhs, rhs, true, options) < 0;
   };
-  std::set<VPackSlice, decltype(cmp)> minSet(cmp);
+  std::multiset<VPackSlice, decltype(cmp)> minSet(cmp);
   for (VPackSlice it : VPackArrayIterator(slice)) {
     if (it.isNull()) {
       continue;
@@ -149,7 +151,7 @@ AqlValue functions::MaxN(ExpressionContext* expressionContext, AstNode const&,
   auto cmp = [options](VPackSlice lhs, VPackSlice rhs) {
     return basics::VelocyPackHelper::compare(lhs, rhs, true, options) > 0;
   };
-  std::set<VPackSlice, decltype(cmp)> minSet(cmp);
+  std::multiset<VPackSlice, decltype(cmp)> minSet(cmp);
   for (VPackSlice it : VPackArrayIterator(slice)) {
     if (it.isNull()) {
       continue;
@@ -172,6 +174,134 @@ AqlValue functions::MaxN(ExpressionContext* expressionContext, AstNode const&,
   builder->openArray();
 
   for (auto i : minSet) {
+    builder->add(i.resolveExternal());
+  }
+  builder->close();
+  return AqlValue(builder->slice(), builder->size());
+}
+
+AqlValue functions::MinWith(ExpressionContext* expressionContext,
+                            AstNode const&,
+                            VPackFunctionParametersView parameters) {
+  AqlValue const& value = extractFunctionParameterValue(parameters, 0);
+  AqlValue const& withValue = extractFunctionParameterValue(parameters, 1);
+
+  if (!value.isArray() || !withValue.isArray()) {
+    // not an array
+    registerWarning(expressionContext, "MINWITH",
+                    TRI_ERROR_QUERY_ARRAY_EXPECTED);
+    return AqlValue(AqlValueHintNull());
+  }
+
+  transaction::Methods* trx = &expressionContext->trx();
+  auto* vopts = &trx->vpackOptions();
+
+  AqlValueMaterializer materializer(vopts);
+  VPackSlice slice = materializer.slice(value);
+  AqlValueMaterializer materializer2(vopts);
+  VPackSlice withSlice = materializer2.slice(withValue);
+
+  if (slice.length() != withSlice.length()) {
+    registerWarning(expressionContext, "MINWITH",
+                    TRI_ERROR_QUERY_FUNCTION_RUNTIME_ERROR);
+    return AqlValue(AqlValueHintNull());
+  }
+
+  VPackSlice minValue;
+  std::vector<VPackSlice> minWithValues;
+  auto options = trx->transactionContextPtr()->getVPackOptions();
+
+  for (size_t i = 0; i < slice.length(); i++) {
+    VPackSlice it = slice.at(i);
+    if (it.isNull()) {
+      continue;
+    }
+    if (minValue.isNone()) {
+      minValue = it;
+      minWithValues.clear();
+      minWithValues.push_back(withSlice.at(i));
+    } else {
+      int ret = basics::VelocyPackHelper::compare(it, minValue, true, options);
+      if (ret < 0) {
+        minValue = it;
+        minWithValues.clear();
+        minWithValues.push_back(withSlice.at(i));
+      } else if (ret == 0) {
+        minWithValues.push_back(withSlice.at(i));
+      }
+    }
+  }
+  if (minWithValues.empty()) {
+    return AqlValue(AqlValueHintNull());
+  }
+  transaction::BuilderLeaser builder(trx);
+  builder->openArray();
+
+  for (auto i : minWithValues) {
+    builder->add(i.resolveExternal());
+  }
+  builder->close();
+  return AqlValue(builder->slice(), builder->size());
+}
+
+AqlValue functions::MaxWith(ExpressionContext* expressionContext,
+                            AstNode const&,
+                            VPackFunctionParametersView parameters) {
+  AqlValue const& value = extractFunctionParameterValue(parameters, 0);
+  AqlValue const& withValue = extractFunctionParameterValue(parameters, 1);
+
+  if (!value.isArray() || !withValue.isArray()) {
+    // not an array
+    registerWarning(expressionContext, "MAXWITH",
+                    TRI_ERROR_QUERY_ARRAY_EXPECTED);
+    return AqlValue(AqlValueHintNull());
+  }
+
+  transaction::Methods* trx = &expressionContext->trx();
+  auto* vopts = &trx->vpackOptions();
+
+  AqlValueMaterializer materializer(vopts);
+  VPackSlice slice = materializer.slice(value);
+  AqlValueMaterializer materializer2(vopts);
+  VPackSlice withSlice = materializer2.slice(withValue);
+
+  if (slice.length() != withSlice.length()) {
+    registerWarning(expressionContext, "MAXWITH",
+                    TRI_ERROR_QUERY_FUNCTION_RUNTIME_ERROR);
+    return AqlValue(AqlValueHintNull());
+  }
+
+  VPackSlice maxValue;
+  std::vector<VPackSlice> maxWithValues;
+  auto options = trx->transactionContextPtr()->getVPackOptions();
+
+  for (size_t i = 0; i < slice.length(); i++) {
+    VPackSlice it = slice.getNthValue(i);
+    if (it.isNull()) {
+      continue;
+    }
+    if (maxValue.isNone()) {
+      maxValue = it;
+      maxWithValues.clear();
+      maxWithValues.push_back(withSlice.getNthValue(i));
+    } else {
+      int ret = basics::VelocyPackHelper::compare(it, maxValue, true, options);
+      if (ret > 0) {
+        maxValue = it;
+        maxWithValues.clear();
+        maxWithValues.push_back(withSlice.getNthValue(i));
+      } else if (ret == 0) {
+        maxWithValues.push_back(withSlice.getNthValue(i));
+      }
+    }
+  }
+  if (maxWithValues.empty()) {
+    return AqlValue(AqlValueHintNull());
+  }
+  transaction::BuilderLeaser builder(trx);
+  builder->openArray();
+
+  for (auto i : maxWithValues) {
     builder->add(i.resolveExternal());
   }
   builder->close();
@@ -202,7 +332,8 @@ AqlValue functions::MinNWith(ExpressionContext* expressionContext,
 
   AqlValueMaterializer materializer(vopts);
   VPackSlice slice = materializer.slice(value);
-  VPackSlice withSlice = materializer.slice(withValue);
+  AqlValueMaterializer materializer2(vopts);
+  VPackSlice withSlice = materializer2.slice(withValue);
 
   if (slice.length() != withSlice.length()) {
     registerWarning(expressionContext, "MINNWITH",
@@ -217,7 +348,7 @@ AqlValue functions::MinNWith(ExpressionContext* expressionContext,
     return basics::VelocyPackHelper::compare(lhs.first, rhs.first, true,
                                              options) < 0;
   };
-  std::set<ElemType, decltype(cmp)> minSet(cmp);
+  std::multiset<ElemType, decltype(cmp)> minSet(cmp);
 
   for (size_t i = 0; i < slice.length(); i++) {
     ElemType it = std::make_pair(slice.at(i), withSlice.at(i));
@@ -272,7 +403,8 @@ AqlValue functions::MaxNWith(ExpressionContext* expressionContext,
 
   AqlValueMaterializer materializer(vopts);
   VPackSlice slice = materializer.slice(value);
-  VPackSlice withSlice = materializer.slice(withValue);
+  AqlValueMaterializer materializer2(vopts);
+  VPackSlice withSlice = materializer2.slice(withValue);
 
   if (slice.length() != withSlice.length()) {
     registerWarning(expressionContext, "MAXNWITH",
@@ -287,7 +419,7 @@ AqlValue functions::MaxNWith(ExpressionContext* expressionContext,
     return basics::VelocyPackHelper::compare(lhs.first, rhs.first, true,
                                              options) > 0;
   };
-  std::set<ElemType, decltype(cmp)> minSet(cmp);
+  std::multiset<ElemType, decltype(cmp)> minSet(cmp);
 
   for (size_t i = 0; i < slice.length(); i++) {
     ElemType it = std::make_pair(slice.at(i), withSlice.at(i));

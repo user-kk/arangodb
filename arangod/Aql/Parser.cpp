@@ -554,7 +554,14 @@ void arangodb::aql::Parser::executeSelectSubQueryPend() {
 
 void arangodb::aql::Parser::produceAggAlias() {
   SQLContext& ctx = sqlContext();
+
   for (auto i : ctx._aggAliasLetNodes) {
+    // 调用这个函数时已经进入了collect的scope,需要重新注册
+    AstNode* varNode = i->getMemberUnchecked(0);
+    TRI_ASSERT(varNode->type == NODE_TYPE_VARIABLE);
+    auto v = static_cast<Variable*>(varNode->getData());
+    _ast.scopes()->addVariable(v);
+    // 添加let节点
     _ast.addOperation(i);
   }
   ctx._aggAliasLetNodes.clear();

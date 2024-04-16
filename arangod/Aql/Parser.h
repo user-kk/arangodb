@@ -217,7 +217,8 @@ class Parser {
   void produceAlias();
 
   /// @brief 生成聚集函数别名的let节点
-  /// @details 聚集函数的别名应该被在having中使用,在进入having子句之前,
+  /// @details
+  /// 聚集函数的别名应该被在having或order_by中使用,在进入having子句之前,
   /// 需要调用produceAggregateStep1(),产生变量,但不产生let子句节点
   /// 在collect节点生成后需要调用此函数来产生let子句节点
   void produceAggAlias();

@@ -2541,7 +2541,7 @@ with_list:
     with_element {
 
     }
-  | with_element T_COMMA with_element{
+  | with_list T_COMMA with_element{
 
     }
   ;
@@ -2734,6 +2734,7 @@ group_by_statements:
         auto node = parser->ast()->createNodeCollect(parser->ast()->createNodeArray(), aggNode, into, intoExpression, nullptr, nullptr);
         parser->ast()->addOperation(node);
       }
+      parser->produceAggAlias();
 
     }
   | group_by_variable_list {parser->produceAggregateStep1();} having_statements {
@@ -2754,9 +2755,9 @@ group_by_statements:
       auto node = parser->ast()->createNodeCollect($1,aggNode,into, intoExpression, nullptr, nullptr);
       parser->ast()->addOperation(node);
 
+      parser->produceAggAlias();
       //处理having
       if($3!=nullptr){
-        parser->produceAggAlias();
         auto filterNode = parser->ast()->createNodeFilter($3);
         parser->ast()->addOperation(filterNode);
       }

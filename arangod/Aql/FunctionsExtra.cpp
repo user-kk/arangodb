@@ -276,22 +276,22 @@ AqlValue functions::MaxWith(ExpressionContext* expressionContext,
   auto options = trx->transactionContextPtr()->getVPackOptions();
 
   for (size_t i = 0; i < slice.length(); i++) {
-    VPackSlice it = slice.getNthValue(i);
+    VPackSlice it = slice.at(i);
     if (it.isNull()) {
       continue;
     }
     if (maxValue.isNone()) {
       maxValue = it;
       maxWithValues.clear();
-      maxWithValues.push_back(withSlice.getNthValue(i));
+      maxWithValues.push_back(withSlice.at(i));
     } else {
       int ret = basics::VelocyPackHelper::compare(it, maxValue, true, options);
       if (ret > 0) {
         maxValue = it;
         maxWithValues.clear();
-        maxWithValues.push_back(withSlice.getNthValue(i));
+        maxWithValues.push_back(withSlice.at(i));
       } else if (ret == 0) {
-        maxWithValues.push_back(withSlice.getNthValue(i));
+        maxWithValues.push_back(withSlice.at(i));
       }
     }
   }

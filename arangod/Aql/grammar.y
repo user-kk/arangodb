@@ -2740,6 +2740,7 @@ group_by_statements:
   | group_by_variable_list {parser->produceAggregateStep1();} having_statements {
 
       parser->setHaving($3);
+      parser->processHaving();
       AstNode* aggNode=parser->produceAggregateStep2();
 
       auto scopes = parser->ast()->scopes();
@@ -2756,7 +2757,7 @@ group_by_statements:
       parser->ast()->addOperation(node);
 
       parser->produceAggAlias();
-      //处理having
+      //添加having
       if($3!=nullptr){
         auto filterNode = parser->ast()->createNodeFilter($3);
         parser->ast()->addOperation(filterNode);
@@ -2805,7 +2806,8 @@ order_by_statements:
       auto node = parser->ast()->createNodeArray();
       parser->pushStack(node);
     } sort_list {
-      auto list = static_cast<AstNode const*>(parser->popStack());
+      auto list = static_cast<AstNode*>(parser->popStack());
+      parser->processOrderBy(list);
       auto node = parser->ast()->createNodeSort(list);
       parser->ast()->addOperation(node);
     }

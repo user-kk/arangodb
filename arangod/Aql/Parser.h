@@ -279,6 +279,10 @@ class Parser {
       _sqlCollectionNodes.erase(i);
     }
   }
+  ///@brief 将having中的group_by变量替换
+  void processHaving();
+  ///@brief 将order_by中的group_by变量替换
+  void processOrderBy(AstNode* arrayNode);
 
  private:
   struct SQLContext;
@@ -327,6 +331,10 @@ class Parser {
     std::unordered_map<Variable*, AstNode*> _selectMap;
     ///@brief 暂存聚集函数别名的let节点,collect节点生成后将要被添加到ast中
     std::vector<AstNode*> _aggAliasLetNodes;
+    ///@brief group_by的表达式节点与被替换后的引用节点
+    /// @details
+    /// 在updateWillReturnNode()函数中被置入,在produceAggregateStep2()被使用
+    std::vector<std::pair<AstNode*, AstNode*>> _groupByNodes;
     bool _isSelect = false;
     bool _isSelectSubQuery = false;  // 是否是select中嵌套的子查询
     bool _allowNULLAlia = true;      // select是否允许空别名

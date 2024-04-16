@@ -1123,8 +1123,8 @@ static const yytype_int16 yyrline[] =
     2449,  2457,  2464,  2467,  2472,  2483,  2489,  2489,  2483,  2532,
     2535,  2541,  2544,  2550,  2556,  2559,  2565,  2569,  2574,  2574,
     2589,  2589,  2626,  2629,  2634,  2637,  2642,  2658,  2661,  2667,
-    2670,  2675,  2685,  2710,  2712,  2720,  2740,  2740,  2767,  2767,
-    2777,  2781,  2786,  2794,  2797,  2802,  2804,  2804,  2814,  2816
+    2670,  2675,  2685,  2710,  2712,  2720,  2740,  2740,  2768,  2768,
+    2778,  2782,  2787,  2795,  2798,  2803,  2805,  2805,  2816,  2818
 };
 #endif
 
@@ -6196,6 +6196,7 @@ yyreduce:
                                                                                 {
 
       parser->setHaving((yyvsp[0].node));
+      parser->processHaving();
       AstNode* aggNode=parser->produceAggregateStep2();
 
       auto scopes = parser->ast()->scopes();
@@ -6212,120 +6213,121 @@ yyreduce:
       parser->ast()->addOperation(node);
 
       parser->produceAggAlias();
-      //处理having
+      //添加having
       if((yyvsp[0].node)!=nullptr){
         auto filterNode = parser->ast()->createNodeFilter((yyvsp[0].node));
         parser->ast()->addOperation(filterNode);
       }
     }
-#line 6221 "grammar.cpp"
+#line 6222 "grammar.cpp"
     break;
 
   case 308: /* $@26: %empty  */
-#line 2767 "grammar.y"
+#line 2768 "grammar.y"
                  {
       auto node = parser->ast()->createNodeArray();
       parser->pushStack(node);
     }
-#line 6230 "grammar.cpp"
+#line 6231 "grammar.cpp"
     break;
 
   case 309: /* group_by_variable_list: "group" "by" $@26 group_by_list  */
-#line 2770 "grammar.y"
+#line 2771 "grammar.y"
                     {
       auto list = static_cast<AstNode*>(parser->popStack());
       TRI_ASSERT(list != nullptr);
       (yyval.node) = list;
     }
-#line 6240 "grammar.cpp"
+#line 6241 "grammar.cpp"
     break;
 
   case 310: /* group_by_list: group_by_element  */
-#line 2777 "grammar.y"
+#line 2778 "grammar.y"
                     {
 
     }
-#line 6248 "grammar.cpp"
+#line 6249 "grammar.cpp"
     break;
 
   case 311: /* group_by_list: group_by_list "," group_by_element  */
-#line 2781 "grammar.y"
+#line 2782 "grammar.y"
                                           {
 
     }
-#line 6256 "grammar.cpp"
+#line 6257 "grammar.cpp"
     break;
 
   case 312: /* group_by_element: expression  */
-#line 2786 "grammar.y"
+#line 2787 "grammar.y"
               {
       std::string vName = parser->ast()->variables()->nextName();
       auto node = parser->ast()->createNodeAssign(vName.c_str(), vName.size(), (yyvsp[0].node),false);
       parser->updateWillReturnNode(node);
       parser->pushArrayElement(node);
     }
-#line 6267 "grammar.cpp"
+#line 6268 "grammar.cpp"
     break;
 
   case 313: /* having_statements: %empty  */
-#line 2794 "grammar.y"
+#line 2795 "grammar.y"
              {
       (yyval.node)=nullptr;
     }
-#line 6275 "grammar.cpp"
+#line 6276 "grammar.cpp"
     break;
 
   case 314: /* having_statements: "having" expression  */
-#line 2797 "grammar.y"
+#line 2798 "grammar.y"
                         {
       (yyval.node)=(yyvsp[0].node);
     }
-#line 6283 "grammar.cpp"
+#line 6284 "grammar.cpp"
     break;
 
   case 315: /* order_by_statements: %empty  */
-#line 2802 "grammar.y"
+#line 2803 "grammar.y"
                  {
     }
-#line 6290 "grammar.cpp"
+#line 6291 "grammar.cpp"
     break;
 
   case 316: /* $@27: %empty  */
-#line 2804 "grammar.y"
+#line 2805 "grammar.y"
                  {
       auto node = parser->ast()->createNodeArray();
       parser->pushStack(node);
     }
-#line 6299 "grammar.cpp"
+#line 6300 "grammar.cpp"
     break;
 
   case 317: /* order_by_statements: "order" "by" $@27 sort_list  */
-#line 2807 "grammar.y"
+#line 2808 "grammar.y"
                 {
-      auto list = static_cast<AstNode const*>(parser->popStack());
+      auto list = static_cast<AstNode*>(parser->popStack());
+      parser->processOrderBy(list);
       auto node = parser->ast()->createNodeSort(list);
       parser->ast()->addOperation(node);
     }
-#line 6309 "grammar.cpp"
+#line 6311 "grammar.cpp"
     break;
 
   case 318: /* limit_statements: %empty  */
-#line 2814 "grammar.y"
+#line 2816 "grammar.y"
                    {
     }
-#line 6316 "grammar.cpp"
+#line 6318 "grammar.cpp"
     break;
 
   case 319: /* limit_statements: limit_statement  */
-#line 2816 "grammar.y"
+#line 2818 "grammar.y"
                    {
 
   }
-#line 6324 "grammar.cpp"
+#line 6326 "grammar.cpp"
     break;
 
 
-#line 6328 "grammar.cpp"
+#line 6330 "grammar.cpp"
 
       default: break;
     }

@@ -291,33 +291,27 @@ void Parser::updateWillReturnNode(AstNode* assignNode) {
   SQLContext& ctx = sqlContext();
   AstNode* member = assignNode->members[1];
 
+  Variable* collectVar =
+      static_cast<Variable*>(assignNode->members[0]->getData());
+  AstNode* refNode = _ast.createNodeReference(collectVar);
+  ctx._groupByNodes.push_back({member, refNode});
+
   // 检查聚集时使用的是变量还是表达式
   if (member->type == NODE_TYPE_REFERENCE) {
     Variable* v = static_cast<Variable*>(member->getData());
     TRI_ASSERT(v != nullptr);
     if (ctx._selectMap.contains(v)) {
-      // 使用id在express.memebers[0]中寻找到对应的节点并替换
-      Variable* collectVar =
-          static_cast<Variable*>(assignNode->members[0]->getData());
-      AstNode* refNode = _ast.createNodeReference(collectVar);
+      // 寻找到对应的节点并替换
       removeSQLCollectionFromRoot(ctx._selectMap[v]);
       *(ctx._selectMap[v]) = *refNode;
-    } else {
-      // TODO:报错
     }
   } else {
     std::vector<AstNode*> needReplace = ctx._willReturnNode->find(
         [member](AstNode* p) { return AstNode::equal(p, member); },
         [](AstNode* p) { return p->type == NODE_TYPE_SUBQUERY; });
     for (AstNode* node : needReplace) {
-      Variable* collectVar =
-          static_cast<Variable*>(assignNode->members[0]->getData());
-      AstNode* refNode = _ast.createNodeReference(collectVar);
       removeSQLCollectionFromRoot(node);
       *node = *refNode;
-    }
-    if (needReplace.empty()) {
-      // TODO:报错
     }
   }
 }
@@ -566,3 +560,77 @@ void arangodb::aql::Parser::produceAggAlias() {
   }
   ctx._aggAliasLetNodes.clear();
 }
+
+void arangodb::aql::Parser::processHaving() {
+  SQLContext& ctx = sqlContext();
+  if (ctx._havingExprssionNode == nullptr) {
+    return;
+  }
+  for (auto [groupNode, refNode] : ctx._groupByNodes) {
+    // 检查聚集时使用的是变量还是表达式
+    if (groupNode->type == NODE_TYPE_REFERENCE) {
+      Variable* v = static_cast<Variable*>(groupNode->getData());
+      TRI_ASSERT(v != nullptr);
+      std::string_view name = v->name;
+      std::vector<AstNode*> needReplace = ctx._havingExprssionNode->find(
+          [name](AstNode* p) {
+            if (p->type != NODE_TYPE_REFERENCE) {
+              return false;
+            }
+
+            if (Variable* v = static_cast<Variable*>(p->getData());
+                v->name != name) {
+              return false;
+            }
+            return true;
+          },
+          [](AstNode* p) { return p->type == NODE_TYPE_SUBQUERY; });
+      for (AstNode* node : needReplace) {
+        // 替换
+        removeSQLCollectionFromRoot(node);
+        *node = *refNode;
+      }
+
+    } else {
+      std::vector<AstNode*> needReplace = ctx._havingExprssionNode->find(
+          [groupNode](AstNode* p) { return AstNode::equal(p, groupNode); },
+          [](AstNode* p) { return p->type == NODE_TYPE_SUBQUERY; });
+      for (AstNode* node : needReplace) {
+        // 替换
+        removeSQLCollectionFromRoot(node);
+        *node = *refNode;
+      }
+    }
+  }
+}
+
+void arangodb::aql::Parser::processOrderBy(AstNode* arrayNode) {
+  SQLContext& ctx = sqlContext();
+  TRI_ASSERT(arrayNode->type == NODE_TYPE_ARRAY);
+  size_t n = arrayNode->numMembers();
+
+  for (size_t i = 0; i < n; i++) {
+    AstNode* expNode = arrayNode->getMemberUnchecked(i);
+    for (auto [groupNode, refNode] : ctx._groupByNodes) {
+      if (groupNode->type == NODE_TYPE_REFERENCE) {
+        Variable* v = static_cast<Variable*>(groupNode->getData());
+        TRI_ASSERT(v != nullptr);
+        std::string_view name = v->name;
+        std::vector<AstNode*> needReplace = expNode->find(
+            [name](AstNode* p) {
+              if (p->type == NODE_TYPE_COLLECTION &&
+                  p->getStringView() == name) {
+                return true;
+              }
+              return false;
+            },
+            [](AstNode* p) { return p->type == NODE_TYPE_SUBQUERY; });
+        for (AstNode* node : needReplace) {
+          // 替换
+          removeSQLCollectionFromRoot(node);
+          *node = *refNode;
+        }
+      }
+    }
+  }
+};

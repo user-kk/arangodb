@@ -198,7 +198,9 @@ target_link_libraries(arango_aql
   arango_indexes
   arango_iresearch
   arango_network
-  immer)
+  immer
+  Eigen3::Eigen
+  )
 
 target_include_directories(arango_aql PRIVATE
   "${PROJECT_SOURCE_DIR}/arangod"

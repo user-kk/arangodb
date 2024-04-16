@@ -64,6 +64,7 @@ void AqlFunctionFeature::prepare() {
   addDateFunctions();
   addMiscFunctions();
   addAggregateFunctions();
+  addArrayFunctions();
 }
 
 void AqlFunctionFeature::add(Function const& func) {
@@ -627,6 +628,10 @@ void AqlFunctionFeature::addMiscFunctions() {
 ///@warning the functions only can be invoked as aggregate function
 void AqlFunctionFeature::addAggregateFunctions() {
   add({"GET_GROUP", ".", Function::makeFlags(), &functions::GetGroup});
+};
+void AqlFunctionFeature::addArrayFunctions() {
+  add({"TO2DARRAYF", ".,.,.,.,.", Function::makeFlags(),
+       &functions::To2dArrayf});
 };
 }  // namespace aql
 }  // namespace arangodb

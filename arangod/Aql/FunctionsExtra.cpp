@@ -1,8 +1,9 @@
-#include "Assertions/Assert.h"
+#include "Aql/AqlValue.h"
 #include "Functions.h"
 #include <cassert>
 #include <cstddef>
 #include <set>
+#include <sstream>
 #include <utility>
 
 #include "Aql/AqlFunctionFeature.h"
@@ -13,9 +14,6 @@
 #include "Aql/Query.h"
 
 #include "Basics/VelocyPackHelper.h"
-#include "Cluster/ClusterInfo.h"
-#include "IResearch/IResearchFilterFactory.h"
-#include "IResearch/VelocyPackHelper.h"
 #include "Indexes/Index.h"
 #include "Rest/Version.h"
 #include "StorageEngine/TransactionState.h"
@@ -23,47 +21,12 @@
 #include "Transaction/Helpers.h"
 #include "Transaction/Methods.h"
 #include "Utils/ExecContext.h"
-#ifdef USE_V8
-#include "V8/v8-vpack.h"
-#endif
-#include "VocBase/KeyGenerator.h"
-#include "VocBase/LogicalCollection.h"
-#include "VocBase/Methods/Collections.h"
-
-#ifdef USE_ENTERPRISE
-#include "Enterprise/VocBase/SmartGraphSchema.h"
-#endif
-
-#include <absl/strings/str_cat.h>
-
-#include <boost/uuid/uuid.hpp>
-#include <boost/uuid/uuid_generators.hpp>
-#include <boost/uuid/uuid_io.hpp>
-
-#include <date/date.h>
-#include <date/iso_week.h>
-#include <date/tz.h>
-#include <s2/s2loop.h>
-#include <s2/s2polygon.h>
-
-#include <unicode/schriter.h>
-#include <unicode/stsearch.h>
-#include <unicode/uchar.h>
-#include <unicode/unistr.h>
 
 #include <velocypack/Collection.h>
 #include <velocypack/Dumper.h>
 #include <velocypack/Iterator.h>
 #include <velocypack/Sink.h>
-
-#ifdef __APPLE__
-#include <regex>
-#endif
-
-#include <arpa/inet.h>
-
-#include <absl/crc/crc32c.h>
-#include <absl/strings/escaping.h>
+#include <Eigen/Dense>
 
 using namespace arangodb;
 using namespace basics;
@@ -446,6 +409,25 @@ AqlValue functions::MaxNWith(ExpressionContext* expressionContext,
   for (auto i : minSet) {
     builder->add(i.second.resolveExternal());
   }
+  builder->close();
+  return AqlValue(builder->slice(), builder->size());
+}
+AqlValue functions::To2dArrayf(
+    arangodb::aql::ExpressionContext* expressionContext, AstNode const&,
+    VPackFunctionParametersView parameters) {
+  Eigen::MatrixXd m(2, 2);
+  m(0, 0) = 3;
+  m(1, 0) = 2.5;
+  m(0, 1) = -1;
+  m(1, 1) = m(1, 0) + m(0, 1);
+  transaction::Methods* trx = &expressionContext->trx();
+  transaction::BuilderLeaser builder(trx);
+
+  std::stringstream strStream;
+  strStream << m;
+
+  builder->openObject();
+  builder->add("value", strStream.str());
   builder->close();
   return AqlValue(builder->slice(), builder->size());
 }

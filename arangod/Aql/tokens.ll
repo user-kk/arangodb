@@ -253,6 +253,13 @@ class Parser;
   return T_UNNEST;
 }
 
+(?i:JOIN) {
+  return T_JOIN;
+}
+
+(?i:ON) {
+  return T_ON;
+}
 
  /* ---------------------------------------------------------------------------
   * predefined type literals

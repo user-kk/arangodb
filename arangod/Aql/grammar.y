@@ -475,6 +475,8 @@ AstNode* transformOutputVariables(Parser* parser, AstNode const* names) {
 %token T_HAVING "having"
 %token T_UNNEST "unnest"
 %token T_DOLLAR "$"
+%token T_JOIN "join"
+%token T_ON "on"
 
 
 
@@ -2562,14 +2564,25 @@ from_statements:
 ;
 
 collection_pair_list:
-    collection_pair {
+    collection_element {
 
     }
   |
-    collection_pair_list T_COMMA collection_pair {
+    collection_pair_list T_COMMA collection_element {
 
     }
   ;
+
+collection_element:
+    collection_pair {
+
+    }
+  | collection_pair T_JOIN collection_pair T_ON expression {
+      auto node = parser->ast()->createNodeFilter($5);
+      parser->ast()->addOperation(node);
+    }
+;
+
 collection_pair:
     expression T_AS variable_name {
       //得到变量名

@@ -24,6 +24,7 @@
 #include "AqlValue.h"
 
 #include "Aql/Arithmetic.h"
+#include "Aql/Ndarray.h"
 #include "Aql/Range.h"
 #include "Basics/VelocyPackHelper.h"
 #include "Transaction/Context.h"
@@ -211,6 +212,8 @@ std::string_view AqlValue::getTypeString() const noexcept {
       break;
     case RANGE:
       return "array";
+    case NDARRAY:
+      return "NdArray";
   }
   switch (s.type()) {
     case velocypack::ValueType::Null:
@@ -615,6 +618,8 @@ double AqlValue::toDouble(bool& failed) const {
         }
       }
     } break;
+    case NDARRAY:
+      break;
     case RANGE:
       if (range()->size() == 1) {
         // We can ignore destruction here, because doCopy is false
@@ -728,6 +733,9 @@ bool AqlValue::toBoolean() const {
     case RANGE: {
       return true;
     }
+    case NDARRAY: {
+      return false;
+    }
   }
   return false;
 }
@@ -828,6 +836,10 @@ void AqlValue::toVelocyPack(VPackOptions const* options, VPackBuilder& builder,
       }
       builder.close();
     } break;
+    case NDARRAY: {
+      _data.ndArrayMeta.pointer->toVPack(builder);
+      break;
+    }
   }
 }
 
@@ -835,6 +847,7 @@ AqlValue AqlValue::materialize(VPackOptions const* options,
                                bool& hasCopied) const {
   auto t = type();
   switch (t) {
+    case NDARRAY:
     case RANGE: {
       VPackBuffer<uint8_t> buffer;
       VPackBuilder builder{buffer};
@@ -881,6 +894,9 @@ void AqlValue::destroy() noexcept {
       break;
     case RANGE:
       delete _data.rangeMeta.range;
+      break;
+    case NDARRAY:
+      delete _data.ndArrayMeta.pointer;
       break;
     default:
       return;
@@ -984,6 +1000,21 @@ int AqlValue::Compare(velocypack::Options const* options, AqlValue const& left,
         return 1;
       }
       return 0;
+    case NDARRAY: {
+      // NDARRAY类型可以比较是否等于,大于小于根据地址比较(无意义)
+      int ret = 0;
+
+      if (left.getNdArray() < right.getNdArray()) {
+        ret = -1;
+      } else if (left.getNdArray() > right.getNdArray()) {
+        ret = 1;
+      } else {
+        return 0;
+      }
+      ret = ((*left.getNdArray()) == (*right.getNdArray())) ? 0 : ret;
+
+      return ret;
+    }
   }
   return 0;
 }
@@ -1156,6 +1187,11 @@ AqlValue::AqlValue(int64_t low, int64_t high) {
   setType(AqlValueType::RANGE);
 }
 
+AqlValue::AqlValue(Ndarray* ndarray) {
+  _data.ndArrayMeta.pointer = ndarray;
+  setType(AqlValueType::NDARRAY);
+}
+
 bool AqlValue::requiresDestruction() const noexcept {
   auto t = type();
   switch (t) {
@@ -1211,6 +1247,8 @@ size_t AqlValue::memoryUsage() const noexcept {
       return _data.managedStringMeta.getLength();
     case RANGE:
       return sizeof(Range);
+    case NDARRAY:
+      return _data.ndArrayMeta.pointer->getMemoryUsage();
     default:
       return 0;
   }
@@ -1280,6 +1318,8 @@ void const* AqlValue::data() const noexcept {
       return _data.managedStringMeta.pointer;
     case RANGE:
       return _data.rangeMeta.range;
+    case NDARRAY:
+      return _data.ndArrayMeta.pointer;
     default:
       TRI_ASSERT(false);
       return nullptr;
@@ -1306,6 +1346,8 @@ size_t std::hash<AqlValue>::operator()(AqlValue const& x) const noexcept {
       return std::hash<void const*>()(x._data.managedStringMeta.pointer);
     case AqlValue::RANGE:
       return std::hash<void const*>()(x._data.rangeMeta.range);
+    case AqlValue::NDARRAY:
+      return std::hash<void const*>()(x._data.ndArrayMeta.pointer);
   }
   return 0;
 }
@@ -1338,6 +1380,8 @@ bool std::equal_to<AqlValue>::operator()(AqlValue const& a,
              b._data.managedStringMeta.pointer;
     case AqlValue::RANGE:
       return a._data.rangeMeta.range == b._data.rangeMeta.range;
+    case AqlValue::NDARRAY:
+      return a._data.ndArrayMeta.pointer == b._data.ndArrayMeta.pointer;
   }
   return false;
 }

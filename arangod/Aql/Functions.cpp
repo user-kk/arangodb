@@ -1507,7 +1507,6 @@ void registerInvalidArgumentWarning(ExpressionContext* expressionContext,
   registerWarning(expressionContext, functionName,
                   TRI_ERROR_QUERY_FUNCTION_ARGUMENT_TYPE_MISMATCH);
 }
-
 }  // namespace aql
 }  // namespace arangodb
 

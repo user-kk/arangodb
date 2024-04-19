@@ -26,6 +26,9 @@
 #include "Aql/AqlValue.h"
 #include "Aql/AqlValueMaterializer.h"
 #include "Aql/Functions.h"
+#include "Aql/Ndarray.h"
+#include "Aql/Parser.h"
+#include "Basics/Exceptions.h"
 #include "Containers/FlatHashSet.h"
 #include "Basics/VelocyPackHelper.h"
 #include "Transaction/Context.h"
@@ -35,6 +38,8 @@
 #include <velocypack/Builder.h>
 #include <velocypack/Iterator.h>
 #include <velocypack/Slice.h>
+#include <velocypack/Value.h>
+#include <velocypack/ValueType.h>
 
 #include <cstddef>
 #include <functional>
@@ -43,6 +48,8 @@
 #include <set>
 #include <utility>
 #include <vector>
+#include <xtensor/xarray.hpp>
+#include <xtensor/xjson.hpp>
 
 using namespace arangodb;
 using namespace arangodb::aql;
@@ -668,6 +675,284 @@ struct AggregatorMax final : public Aggregator {
   }
 
   AqlValue value;
+};
+
+struct AggregatorToArrayf final : public AggregatorNeedDynamicMemory {
+  explicit AggregatorToArrayf(velocypack::Options const* opts)
+      : AggregatorNeedDynamicMemory(opts) {}
+
+  ~AggregatorToArrayf() { AggregatorNeedDynamicMemory::clear(); }
+
+  void reset() override { AggregatorNeedDynamicMemory::clear(); }
+
+  void reduce(VPackFunctionParametersView parameters) override {
+    if (!isInitialized) {
+      init(parameters);
+    }
+    std::vector<size_t> indice;
+    for (size_t i = 2; i < parameters.size() - 1; i++) {
+      int index = extractFunctionParameterValue(parameters, i).toInt64();
+
+      if (index < 0) {
+        THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
+                                       "Parameter error");
+      }
+      indice.push_back(static_cast<size_t>(index));
+    }
+    float val = extractFunctionParameterValue(parameters, parameters.size() - 1)
+                    .toDouble();
+    datas->set(indice, val);
+  }
+
+  AqlValue get() const override {
+    auto shape = datas->shape();
+    Ndarray* p = datas.release();
+    return AqlValue(p);
+  }
+
+  void init(VPackFunctionParametersView parameters) {
+    AqlValue info = extractFunctionParameterValue(parameters, 0);
+
+    if (!info.isArray()) {
+      THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE, "Parameter error");
+    }
+    VPackSlice infoSlice = info.slice();
+    size_t dimensions = 0;
+    dimensions = infoSlice.length();
+
+    if (dimensions < 1) {
+      THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE, "Parameter error");
+    }
+
+    // 检查参数个数是否正确
+    if (parameters.size() != 3 + dimensions) {
+      THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
+                                     "Parameter number error");
+    }
+
+    // 计算空间
+    static constexpr uint64_t MaterializationLimit = 10ULL * 1000ULL * 1000ULL;
+    size_t n = 1;
+    std::vector<size_t> shape;
+    std::vector<std::string> axisNames;
+    shape.reserve(dimensions);
+    for (auto const& i : arangodb::velocypack::ArrayIterator(infoSlice)) {
+      int length = 0;
+      try {
+        length = i["length"].getInt();
+        if (i.hasKey("axis")) {
+          axisNames.push_back(i["axis"].copyString());
+        }
+      } catch (arangodb::velocypack::Exception e) {
+        THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
+                                       "Parameter error");
+      }
+      if (length < 1) {
+        THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
+                                       "Parameter error");
+      }
+      shape.push_back(length);
+
+      n = n * (length + 1);
+    }
+    if (n > MaterializationLimit) {
+      THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
+                                     "it is too big to be materialized");
+    }
+    float initValue = extractFunctionParameterValue(parameters, 1).toDouble();
+    // 置入初值
+    datas = std::make_unique<Ndarray>(initValue, shape);
+    datas->setAxisNames(axisNames);
+    isInitialized = true;
+  }
+
+  bool isInitialized = false;
+  mutable std::unique_ptr<Ndarray> datas;
+};
+struct AggregatorToArrayd final : public AggregatorNeedDynamicMemory {
+  explicit AggregatorToArrayd(velocypack::Options const* opts)
+      : AggregatorNeedDynamicMemory(opts) {}
+
+  ~AggregatorToArrayd() { AggregatorNeedDynamicMemory::clear(); }
+
+  void reset() override { AggregatorNeedDynamicMemory::clear(); }
+
+  void reduce(VPackFunctionParametersView parameters) override {
+    if (!isInitialized) {
+      init(parameters);
+    }
+    std::vector<size_t> indice;
+    for (size_t i = 2; i < parameters.size() - 1; i++) {
+      int index = extractFunctionParameterValue(parameters, i).toInt64();
+
+      if (index < 0) {
+        THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
+                                       "Parameter error");
+      }
+      indice.push_back(static_cast<size_t>(index));
+    }
+    double val =
+        extractFunctionParameterValue(parameters, parameters.size() - 1)
+            .toDouble();
+    datas->set(indice, val);
+  }
+
+  AqlValue get() const override {
+    auto shape = datas->shape();
+    Ndarray* p = datas.release();
+    return AqlValue(p);
+  }
+
+  void init(VPackFunctionParametersView parameters) {
+    AqlValue info = extractFunctionParameterValue(parameters, 0);
+
+    if (!info.isArray()) {
+      THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE, "Parameter error");
+    }
+    VPackSlice infoSlice = info.slice();
+    size_t dimensions = 0;
+    dimensions = infoSlice.length();
+
+    if (dimensions < 1) {
+      THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE, "Parameter error");
+    }
+
+    // 检查参数个数是否正确
+    if (parameters.size() != 3 + dimensions) {
+      THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
+                                     "Parameter number error");
+    }
+
+    // 计算空间
+    static constexpr uint64_t MaterializationLimit = 10ULL * 1000ULL * 1000ULL;
+    size_t n = 1;
+    std::vector<size_t> shape;
+    std::vector<std::string> axisNames;
+    shape.reserve(dimensions);
+    for (auto const& i : arangodb::velocypack::ArrayIterator(infoSlice)) {
+      int length = 0;
+      try {
+        length = i["length"].getInt();
+        if (i.hasKey("axis")) {
+          axisNames.push_back(i["axis"].copyString());
+        }
+      } catch (arangodb::velocypack::Exception e) {
+        THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
+                                       "Parameter error");
+      }
+      if (length < 1) {
+        THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
+                                       "Parameter error");
+      }
+      shape.push_back(length);
+
+      n = n * (length + 1);
+    }
+    if (n > MaterializationLimit) {
+      THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
+                                     "it is too big to be materialized");
+    }
+    double initValue = extractFunctionParameterValue(parameters, 1).toDouble();
+    // 置入初值
+    datas = std::make_unique<Ndarray>(initValue, shape);
+    datas->setAxisNames(axisNames);
+    isInitialized = true;
+  }
+
+  bool isInitialized = false;
+  mutable std::unique_ptr<Ndarray> datas;
+};
+struct AggregatorToArrayi final : public AggregatorNeedDynamicMemory {
+  explicit AggregatorToArrayi(velocypack::Options const* opts)
+      : AggregatorNeedDynamicMemory(opts) {}
+
+  ~AggregatorToArrayi() { AggregatorNeedDynamicMemory::clear(); }
+
+  void reset() override { AggregatorNeedDynamicMemory::clear(); }
+
+  void reduce(VPackFunctionParametersView parameters) override {
+    if (!isInitialized) {
+      init(parameters);
+    }
+    std::vector<size_t> indice;
+    for (size_t i = 2; i < parameters.size() - 1; i++) {
+      int index = extractFunctionParameterValue(parameters, i).toInt64();
+
+      if (index < 0) {
+        THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
+                                       "Parameter error");
+      }
+      indice.push_back(static_cast<size_t>(index));
+    }
+    int val = extractFunctionParameterValue(parameters, parameters.size() - 1)
+                  .toInt64();
+    datas->set(indice, val);
+  }
+
+  AqlValue get() const override {
+    auto shape = datas->shape();
+    Ndarray* p = datas.release();
+    return AqlValue(p);
+  }
+
+  void init(VPackFunctionParametersView parameters) {
+    AqlValue info = extractFunctionParameterValue(parameters, 0);
+
+    if (!info.isArray()) {
+      THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE, "Parameter error");
+    }
+    VPackSlice infoSlice = info.slice();
+    size_t dimensions = 0;
+    dimensions = infoSlice.length();
+
+    if (dimensions < 1) {
+      THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE, "Parameter error");
+    }
+
+    // 检查参数个数是否正确
+    if (parameters.size() != 3 + dimensions) {
+      THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
+                                     "Parameter number error");
+    }
+
+    // 计算空间
+    static constexpr uint64_t MaterializationLimit = 10ULL * 1000ULL * 1000ULL;
+    size_t n = 1;
+    std::vector<size_t> shape;
+    std::vector<std::string> axisNames;
+    shape.reserve(dimensions);
+    for (auto const& i : arangodb::velocypack::ArrayIterator(infoSlice)) {
+      int length = 0;
+      try {
+        length = i["length"].getInt();
+        if (i.hasKey("axis")) {
+          axisNames.push_back(i["axis"].copyString());
+        }
+      } catch (arangodb::velocypack::Exception e) {
+        THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
+                                       "Parameter error");
+      }
+      if (length < 1) {
+        THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
+                                       "Parameter error");
+      }
+      shape.push_back(length);
+
+      n = n * (length + 1);
+    }
+    if (n > MaterializationLimit) {
+      THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
+                                     "it is too big to be materialized");
+    }
+    int initValue = extractFunctionParameterValue(parameters, 1).toInt64();
+    // 置入初值
+    datas = std::make_unique<Ndarray>(initValue, shape);
+    datas->setAxisNames(axisNames);
+    isInitialized = true;
+  }
+
+  bool isInitialized = false;
+  mutable std::unique_ptr<Ndarray> datas;
 };
 
 struct AggregatorSum final : public Aggregator {
@@ -1513,7 +1798,16 @@ std::unordered_map<std::string_view, AggregatorInfo> const aggregators = {
       official, "BIT_XOR", "BIT_XOR"}},
     {"GET_GROUP",
      {std::make_shared<GenericFactory<AggregatorGetGroup>>(), doesRequireInput,
-      official, "GET_GROUP", "GET_GROUP"}}};
+      official, "GET_GROUP", "GET_GROUP"}},
+    {"TOARRAYF",
+     {std::make_shared<GenericFactory<AggregatorToArrayf>>(), doesRequireInput,
+      official, "TOARRAYF", "TOARRAYF"}},
+    {"TOARRAYD",
+     {std::make_shared<GenericFactory<AggregatorToArrayd>>(), doesRequireInput,
+      official, "TOARRAYD", "TOARRAYD"}},
+    {"TOARRAYI",
+     {std::make_shared<GenericFactory<AggregatorToArrayi>>(), doesRequireInput,
+      official, "TOARRAYI", "TOARRAYI"}}};
 
 /// @brief aliases (user-visible) for aggregation functions
 std::unordered_map<std::string_view, std::string_view> const aliases = {

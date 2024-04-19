@@ -191,7 +191,7 @@ if (USE_V8)
 endif()
 
 add_subdirectory(Optimizer)
-
+find_package(xtensor REQUIRED)
 target_link_libraries(arango_aql
   arango_geo
   arango_graph
@@ -199,8 +199,11 @@ target_link_libraries(arango_aql
   arango_iresearch
   arango_network
   immer
-  Eigen3::Eigen
+  xtensor
+  ${BLAS_LIBRARIES}
+  ${LAPACK_LIBRARIES}
   )
+target_include_directories(arango_aql PUBLIC ${xtensor_INCLUDE_DIRS})
 
 target_include_directories(arango_aql PRIVATE
   "${PROJECT_SOURCE_DIR}/arangod"

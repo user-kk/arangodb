@@ -67,6 +67,7 @@ namespace aql {
 class SharedAqlItemBlockPtr;
 struct Range;
 class AqlItemBlock;
+class Ndarray;
 
 // no-op struct used only internally to indicate that we want
 // to copy the data behind the slice
@@ -140,8 +141,9 @@ struct AqlValue final {
                           // number value (in little-endian)
     VPACK_INLINE_UINT64,  // contains vpack data, inline and unpacked 64bit uint
                           // number value (in little-endian)
-    VPACK_INLINE_DOUBLE   // contains vpack data, inline and unpacked 64bit
+    VPACK_INLINE_DOUBLE,  // contains vpack data, inline and unpacked 64bit
                           // double number value (in little-endian)
+    NDARRAY
   };
 
   static_assert(
@@ -182,6 +184,7 @@ struct AqlValue final {
   /// | AT | XX | XX | XX | XX | XX | XX | XX | PD | PD | PD | PD | PD | PD | PD | PD | VPACK_SLICE_POINTER
   /// | AT | MO | ML | ML | ML | ML | ML | ML | PD | PD | PD | PD | PD | PD | PD | PD | VPACK_MANAGED_SLICE
   /// | AT | XX | XX | XX | XX | XX | XX | XX | PD | PD | PD | PD | PD | PD | PD | PD | VPACK_MANAGED_STRING
+  /// | AT | XX | XX | XX | XX | XX | XX | XX | PD | PD | PD | PD | PD | PD | PD | PD | NdArray
   /// | AT | XX | XX | XX | XX | XX | XX | XX | PD | PD | PD | PD | PD | PD | PD | PD | RANGE
   /// | AT | ST | SD | SD | SD | SD | SD | SD | SD | SD | SD | SD | SD | SD | SD | SD | VPACK_INLINE
   /// | AT | XX | XX | XX | XX | XX | XX | ST | SD | SD | SD | SD | SD | SD | SD | SD | VPACK_64BIT_INLINE_(INT/UINT/DOUBLE)
@@ -197,6 +200,12 @@ struct AqlValue final {
       Range const* range;
     } rangeMeta;
     static_assert(sizeof(rangeMeta) == 16, "RANGE layout is not 16 bytes!");
+    // RANGE
+    struct {
+      uint8_t padding[8];
+      Ndarray* pointer;
+    } ndArrayMeta;
+    static_assert(sizeof(ndArrayMeta) == 16, "ndArray layout is not 16 bytes!");
 
     // VPACK_MANAGED_SLICE
     struct {
@@ -333,6 +342,8 @@ struct AqlValue final {
 
   // construct range type
   AqlValue(int64_t low, int64_t high);
+  // construct NdArray type
+  AqlValue(Ndarray* ndarray);
 
   /// @brief AqlValues can be copied and moved as required
   /// memory management is not performed via AqlValue destructor but via
@@ -382,6 +393,8 @@ struct AqlValue final {
   /// as arrays, too!)
   bool isArray() const noexcept;
 
+  bool isNdArray() const noexcept { return type() == NDARRAY; }
+
   // @brief return a string describing the content of this AqlValue
   std::string_view getTypeString() const noexcept;
 
@@ -410,6 +423,7 @@ struct AqlValue final {
   AqlValue get(CollectionNameResolver const& resolver,
                std::vector<std::string> const& names, bool& mustDestroy,
                bool copy) const;
+  Ndarray* getNdArray() const noexcept { return _data.ndArrayMeta.pointer; }
   bool hasKey(std::string_view name) const;
 
   /// @brief get the numeric value of an AqlValue

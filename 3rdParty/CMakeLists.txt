@@ -339,7 +339,3 @@ else()
     COMMAND ${CMAKE_COMMAND} -E copy ${TZ_DATA_FILES} ${CMAKE_BINARY_DIR}/bin/tzdata
     COMMAND ${CMAKE_COMMAND} -E copy ${TZ_DATA_FILES} ${CMAKE_BINARY_DIR}/tests/tzdata)
 endif()
-################################################################################
-## eigen
-################################################################################
-add_subdirectory(eigen)

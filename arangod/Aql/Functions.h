@@ -311,8 +311,12 @@ AqlValue MaxN(arangodb::aql::ExpressionContext*, AstNode const&,
               VPackFunctionParametersView);
 AqlValue MaxNWith(arangodb::aql::ExpressionContext*, AstNode const&,
                   VPackFunctionParametersView);
-AqlValue To2dArrayf(arangodb::aql::ExpressionContext*, AstNode const&,
-                    VPackFunctionParametersView);
+AqlValue ToArrayf(arangodb::aql::ExpressionContext*, AstNode const&,
+                  VPackFunctionParametersView);
+AqlValue ToArrayd(arangodb::aql::ExpressionContext*, AstNode const&,
+                  VPackFunctionParametersView);
+AqlValue ToArrayi(arangodb::aql::ExpressionContext*, AstNode const&,
+                  VPackFunctionParametersView);
 AqlValue Sum(arangodb::aql::ExpressionContext*, AstNode const&,
              VPackFunctionParametersView);
 AqlValue Average(arangodb::aql::ExpressionContext*, AstNode const&,

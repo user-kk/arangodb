@@ -26,7 +26,6 @@
 #include <velocypack/Dumper.h>
 #include <velocypack/Iterator.h>
 #include <velocypack/Sink.h>
-#include <Eigen/Dense>
 
 using namespace arangodb;
 using namespace basics;
@@ -412,22 +411,22 @@ AqlValue functions::MaxNWith(ExpressionContext* expressionContext,
   builder->close();
   return AqlValue(builder->slice(), builder->size());
 }
-AqlValue functions::To2dArrayf(
+AqlValue functions::ToArrayf(
     arangodb::aql::ExpressionContext* expressionContext, AstNode const&,
     VPackFunctionParametersView parameters) {
-  Eigen::MatrixXd m(2, 2);
-  m(0, 0) = 3;
-  m(1, 0) = 2.5;
-  m(0, 1) = -1;
-  m(1, 1) = m(1, 0) + m(0, 1);
-  transaction::Methods* trx = &expressionContext->trx();
-  transaction::BuilderLeaser builder(trx);
-
-  std::stringstream strStream;
-  strStream << m;
-
-  builder->openObject();
-  builder->add("value", strStream.str());
-  builder->close();
-  return AqlValue(builder->slice(), builder->size());
+  THROW_ARANGO_EXCEPTION_MESSAGE(
+      TRI_ERROR_QUERY_PARSE,
+      "ToArrayf() must be invoked as aggregate function");
 }
+AqlValue functions::ToArrayd(arangodb::aql::ExpressionContext*, AstNode const&,
+                             VPackFunctionParametersView) {
+  THROW_ARANGO_EXCEPTION_MESSAGE(
+      TRI_ERROR_QUERY_PARSE,
+      "ToArrayf() must be invoked as aggregate function");
+};
+AqlValue functions::ToArrayi(arangodb::aql::ExpressionContext*, AstNode const&,
+                             VPackFunctionParametersView) {
+  THROW_ARANGO_EXCEPTION_MESSAGE(
+      TRI_ERROR_QUERY_PARSE,
+      "ToArrayf() must be invoked as aggregate function");
+};

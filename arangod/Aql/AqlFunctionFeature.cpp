@@ -630,8 +630,9 @@ void AqlFunctionFeature::addAggregateFunctions() {
   add({"GET_GROUP", ".", Function::makeFlags(), &functions::GetGroup});
 };
 void AqlFunctionFeature::addArrayFunctions() {
-  add({"TO2DARRAYF", ".,.,.,.,.", Function::makeFlags(),
-       &functions::To2dArrayf});
+  add({"TOARRAYF", ".,.|+", Function::makeFlags(), &functions::ToArrayf});
+  add({"TOARRAYD", ".,.|+", Function::makeFlags(), &functions::ToArrayd});
+  add({"TOARRAYI", ".,.|+", Function::makeFlags(), &functions::ToArrayi});
 };
 }  // namespace aql
 }  // namespace arangodb

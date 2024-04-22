@@ -26,7 +26,7 @@
 #include "Aql/AqlValue.h"
 #include "Aql/AqlValueMaterializer.h"
 #include "Aql/Functions.h"
-#include "Aql/Ndarray.h"
+#include "Aql/Ndarray.hpp"
 #include "Aql/Parser.h"
 #include "Basics/Exceptions.h"
 #include "Containers/FlatHashSet.h"
@@ -677,11 +677,11 @@ struct AggregatorMax final : public Aggregator {
   AqlValue value;
 };
 
-struct AggregatorToArrayf final : public AggregatorNeedDynamicMemory {
-  explicit AggregatorToArrayf(velocypack::Options const* opts)
+struct AggregatorToNdArrayf final : public AggregatorNeedDynamicMemory {
+  explicit AggregatorToNdArrayf(velocypack::Options const* opts)
       : AggregatorNeedDynamicMemory(opts) {}
 
-  ~AggregatorToArrayf() { AggregatorNeedDynamicMemory::clear(); }
+  ~AggregatorToNdArrayf() { AggregatorNeedDynamicMemory::clear(); }
 
   void reset() override { AggregatorNeedDynamicMemory::clear(); }
 
@@ -769,11 +769,11 @@ struct AggregatorToArrayf final : public AggregatorNeedDynamicMemory {
   bool isInitialized = false;
   mutable std::unique_ptr<Ndarray> datas;
 };
-struct AggregatorToArrayd final : public AggregatorNeedDynamicMemory {
-  explicit AggregatorToArrayd(velocypack::Options const* opts)
+struct AggregatorToNdArrayd final : public AggregatorNeedDynamicMemory {
+  explicit AggregatorToNdArrayd(velocypack::Options const* opts)
       : AggregatorNeedDynamicMemory(opts) {}
 
-  ~AggregatorToArrayd() { AggregatorNeedDynamicMemory::clear(); }
+  ~AggregatorToNdArrayd() { AggregatorNeedDynamicMemory::clear(); }
 
   void reset() override { AggregatorNeedDynamicMemory::clear(); }
 
@@ -862,11 +862,11 @@ struct AggregatorToArrayd final : public AggregatorNeedDynamicMemory {
   bool isInitialized = false;
   mutable std::unique_ptr<Ndarray> datas;
 };
-struct AggregatorToArrayi final : public AggregatorNeedDynamicMemory {
-  explicit AggregatorToArrayi(velocypack::Options const* opts)
+struct AggregatorToNdArrayi final : public AggregatorNeedDynamicMemory {
+  explicit AggregatorToNdArrayi(velocypack::Options const* opts)
       : AggregatorNeedDynamicMemory(opts) {}
 
-  ~AggregatorToArrayi() { AggregatorNeedDynamicMemory::clear(); }
+  ~AggregatorToNdArrayi() { AggregatorNeedDynamicMemory::clear(); }
 
   void reset() override { AggregatorNeedDynamicMemory::clear(); }
 
@@ -1799,15 +1799,15 @@ std::unordered_map<std::string_view, AggregatorInfo> const aggregators = {
     {"GET_GROUP",
      {std::make_shared<GenericFactory<AggregatorGetGroup>>(), doesRequireInput,
       official, "GET_GROUP", "GET_GROUP"}},
-    {"TOARRAYF",
-     {std::make_shared<GenericFactory<AggregatorToArrayf>>(), doesRequireInput,
-      official, "TOARRAYF", "TOARRAYF"}},
-    {"TOARRAYD",
-     {std::make_shared<GenericFactory<AggregatorToArrayd>>(), doesRequireInput,
-      official, "TOARRAYD", "TOARRAYD"}},
-    {"TOARRAYI",
-     {std::make_shared<GenericFactory<AggregatorToArrayi>>(), doesRequireInput,
-      official, "TOARRAYI", "TOARRAYI"}}};
+    {"AGG_TO_NDARRAYF",
+     {std::make_shared<GenericFactory<AggregatorToNdArrayf>>(),
+      doesRequireInput, official, "AGG_TO_NDARRAYF", "AGG_TO_NDARRAYF"}},
+    {"AGG_TO_NDARRAYD",
+     {std::make_shared<GenericFactory<AggregatorToNdArrayd>>(),
+      doesRequireInput, official, "AGG_TO_NDARRAYD", "AGG_TO_NDARRAYD"}},
+    {"AGG_TO_NDARRAYI",
+     {std::make_shared<GenericFactory<AggregatorToNdArrayi>>(),
+      doesRequireInput, official, "AGG_TO_NDARRAYI", "AGG_TO_NDARRAYI"}}};
 
 /// @brief aliases (user-visible) for aggregation functions
 std::unordered_map<std::string_view, std::string_view> const aliases = {

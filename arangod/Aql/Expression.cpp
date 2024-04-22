@@ -32,6 +32,7 @@
 #include "Aql/ExpressionContext.h"
 #include "Aql/Function.h"
 #include "Aql/Functions.h"
+#include "Aql/NdarrayOperator.hpp"
 #include "Aql/Quantifier.h"
 #include "Aql/Query.h"
 #include "Aql/QueryContext.h"
@@ -1877,6 +1878,82 @@ AqlValue Expression::executeSimpleExpressionArithmetic(ExpressionContext& ctx,
                                          mustDestroy, true);
   AqlValueGuard guardRhs(rhs, mustDestroy);
 
+  if (lhs.canTurnIntoNdarray()) {
+    lhs.turnIntoNdarray();
+  }
+  if (rhs.canTurnIntoNdarray()) {
+    rhs.turnIntoNdarray();
+  }
+
+  if (lhs.isNdArray() && rhs.isNdArray()) {  // 都是ndarray
+    Ndop::BinaryOperator op;
+    switch (node->type) {
+      case NODE_TYPE_OPERATOR_BINARY_PLUS:
+        op = Ndop::ADD;
+        break;
+      case NODE_TYPE_OPERATOR_BINARY_MINUS:
+        op = Ndop::SUB;
+        break;
+      case NODE_TYPE_OPERATOR_BINARY_TIMES:
+        op = Ndop::MUL;
+        break;
+      case NODE_TYPE_OPERATOR_BINARY_DIV:
+        op = Ndop::DIV;
+        break;
+      case NODE_TYPE_OPERATOR_BINARY_MOD:
+        op = Ndop::MOD;
+        break;
+      default:
+        return AqlValue(AqlValueHintDouble(0.0));
+    }
+    return AqlValue(
+        Ndop::compute(*(lhs.getNdArray()), *(rhs.getNdArray()), op));
+  }
+  if (lhs.isNdArray() || rhs.isNdArray()) {  // 有一个是ndarry
+    Ndop::BinaryOperator op;
+    switch (node->type) {
+      case NODE_TYPE_OPERATOR_BINARY_PLUS:
+        op = Ndop::ADD;
+        break;
+      case NODE_TYPE_OPERATOR_BINARY_MINUS:
+        op = Ndop::SUB;
+        break;
+      case NODE_TYPE_OPERATOR_BINARY_TIMES:
+        op = Ndop::MUL;
+        break;
+      case NODE_TYPE_OPERATOR_BINARY_DIV:
+        op = Ndop::DIV;
+        break;
+      case NODE_TYPE_OPERATOR_BINARY_MOD:
+        op = Ndop::MOD;
+        break;
+      default:
+        return AqlValue(AqlValueHintDouble(0.0));
+    }
+    if (lhs.isNdArray()) {
+      if (rhs.isInt()) {
+        return AqlValue(Ndop::compute(*(lhs.getNdArray()),
+                                      static_cast<int>(rhs.toInt64()), op));
+      } else if (rhs.isfloatOrDouble()) {
+        return AqlValue(Ndop::compute(*(lhs.getNdArray()), rhs.toDouble(), op));
+      } else {
+        THROW_ARANGO_EXCEPTION_MESSAGE(
+            TRI_ERROR_QUERY_PARSE, "ndarry calculations with the wrong type ");
+      }
+    } else {
+      if (lhs.isInt()) {
+        return AqlValue(Ndop::compute(static_cast<int>(lhs.toInt64()),
+                                      *(rhs.getNdArray()), op));
+      } else if (lhs.isfloatOrDouble()) {
+        return AqlValue(Ndop::compute(lhs.toDouble(), *(rhs.getNdArray()), op));
+      } else {
+        THROW_ARANGO_EXCEPTION_MESSAGE(
+            TRI_ERROR_QUERY_PARSE, "ndarry calculations with the wrong type ");
+      }
+    }
+  }
+
+  // 不用再析构了,已经绑定好了guard
   mustDestroy = false;
 
   bool failed = false;

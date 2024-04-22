@@ -29,11 +29,13 @@
 #include "ApplicationFeatures/ApplicationServer.h"
 #include "ApplicationFeatures/LanguageFeature.h"
 #include "Aql/AqlFunctionFeature.h"
+#include "Aql/AqlValue.h"
 #include "Aql/AqlValueMaterializer.h"
 #include "Aql/Expression.h"
 #include "Aql/ExpressionContext.h"
 #include "Aql/Function.h"
 #include "Aql/Query.h"
+#include <Aql/NdarrayOperator.hpp>
 #include "Aql/QueryExpressionContext.h"
 #include "Aql/Range.h"
 #include "Basics/Endian.h"
@@ -7763,6 +7765,14 @@ AqlValue functions::Round(ExpressionContext*, AstNode const&,
 AqlValue functions::Abs(ExpressionContext*, AstNode const&,
                         VPackFunctionParametersView parameters) {
   AqlValue const& value = extractFunctionParameterValue(parameters, 0);
+  if (value.canTurnIntoNdarray()) {
+    auto p = value.getTurnIntoNdarray();
+    if (p.index() == 0) {
+      return AqlValue(Ndop::abs(std::get<0>(p)));
+    } else {
+      return AqlValue(Ndop::abs(std::get<1>(p).get()));
+    }
+  }
 
   double input = value.toDouble();
   return ::numberValue(std::abs(input), true);
@@ -7790,7 +7800,14 @@ AqlValue functions::Floor(ExpressionContext*, AstNode const&,
 AqlValue functions::Sqrt(ExpressionContext*, AstNode const&,
                          VPackFunctionParametersView parameters) {
   AqlValue const& value = extractFunctionParameterValue(parameters, 0);
-
+  if (value.canTurnIntoNdarray()) {
+    auto p = value.getTurnIntoNdarray();
+    if (p.index() == 0) {
+      return AqlValue(Ndop::sqrt(std::get<0>(p)));
+    } else {
+      return AqlValue(Ndop::sqrt(std::get<1>(p).get()));
+    }
+  }
   double input = value.toDouble();
   return ::numberValue(std::sqrt(input), true);
 }
@@ -7800,6 +7817,14 @@ AqlValue functions::Pow(ExpressionContext*, AstNode const&,
                         VPackFunctionParametersView parameters) {
   AqlValue const& baseValue = extractFunctionParameterValue(parameters, 0);
   AqlValue const& expValue = extractFunctionParameterValue(parameters, 1);
+  if (baseValue.canTurnIntoNdarray()) {
+    auto p = baseValue.getTurnIntoNdarray();
+    if (p.index() == 0) {
+      return AqlValue(Ndop::power(std::get<0>(p), expValue.toDouble()));
+    } else {
+      return AqlValue(Ndop::power(std::get<1>(p).get(), expValue.toDouble()));
+    }
+  }
 
   double base = baseValue.toDouble();
   double exp = expValue.toDouble();
@@ -7839,6 +7864,14 @@ AqlValue functions::Exp(ExpressionContext*, AstNode const&,
                         VPackFunctionParametersView parameters) {
   AqlValue const& value = extractFunctionParameterValue(parameters, 0);
 
+    if (value.canTurnIntoNdarray()) {
+    auto p = value.getTurnIntoNdarray();
+    if (p.index() == 0) {
+      return AqlValue(Ndop::exp(std::get<0>(p)));
+    } else {
+      return AqlValue(Ndop::exp(std::get<1>(p).get()));
+    }
+  }
   double input = value.toDouble();
   return ::numberValue(std::exp(input), true);
 }

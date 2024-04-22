@@ -32,7 +32,9 @@
 
 #include <velocypack/Slice.h>
 #include <velocypack/velocypack-common.h>
+#include <memory>
 #include <string_view>
+#include <variant>
 #include <vector>
 
 namespace v8 {
@@ -383,6 +385,12 @@ struct AqlValue final {
   /// @brief whether or not the value is a number
   bool isNumber() const noexcept;
 
+  /// @brief whether or not the value is an int number
+  bool isInt() const noexcept;
+
+  /// @brief whether or not the value is an float point number
+  bool isfloatOrDouble() const noexcept;
+
   /// @brief whether or not the value is a string
   bool isString() const noexcept;
 
@@ -394,6 +402,12 @@ struct AqlValue final {
   bool isArray() const noexcept;
 
   bool isNdArray() const noexcept { return type() == NDARRAY; }
+
+  bool isVackNdarray() const noexcept;
+
+  bool canTurnIntoNdarray() const noexcept {
+    return isNdArray() || isVackNdarray();
+  }
 
   // @brief return a string describing the content of this AqlValue
   std::string_view getTypeString() const noexcept;
@@ -481,6 +495,12 @@ struct AqlValue final {
   AqlValueType type() const noexcept {
     return static_cast<AqlValueType>(_data.aqlValueType);
   }
+  /// @brief turn into ndarray
+  void turnIntoNdarray();
+
+  /// @brief return turn into ndarray
+  ///@details 当返回裸指针时,不用销毁,返回unique_ptr时需要销毁
+  std::variant<Ndarray*, std::unique_ptr<Ndarray>> getTurnIntoNdarray() const;
 
  private:
   /// @brief initializes value from a slice, when the length is already known

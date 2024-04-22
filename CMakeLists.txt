@@ -1168,6 +1168,29 @@ endforeach ()
 add_custom_target(exitcodefiles ALL DEPENDS ${EXIT_CODE_FILES_GEN})
 
 ################################################################################
+## xtensor and xtensor-blas
+################################################################################
+if (WIN32)
+    find_package(OpenBLAS REQUIRED)
+    set(BLAS_LIBRARIES ${CMAKE_INSTALL_PREFIX}${OpenBLAS_LIBRARIES})
+else()
+    find_package(BLAS REQUIRED)
+    find_package(LAPACK REQUIRED)
+endif()
+find_package(xtl REQUIRED)
+find_package(xtensor REQUIRED)
+
+message(STATUS "BLAS VENDOR:    " ${BLA_VENDOR})
+message(STATUS "BLAS LIBRARIES: " ${BLAS_LIBRARIES})
+
+if(MSVC)
+    set(CMAKE_EXE_LINKER_FLAGS /MANIFEST:NO)
+endif()
+
+
+
+
+################################################################################
 ## SUB-PROJECTS
 ################################################################################
 
@@ -1218,21 +1241,3 @@ add_custom_target(arangodb
    DEPENDS arangod client-tools)
 
 add_subdirectory(utils/gdb-pretty-printers/immer/test)
-
-################################################################################
-## xtensor and xtensor-blas
-################################################################################
-if (WIN32)
-    find_package(OpenBLAS REQUIRED)
-    set(BLAS_LIBRARIES ${CMAKE_INSTALL_PREFIX}${OpenBLAS_LIBRARIES})
-else()
-    find_package(BLAS REQUIRED)
-    find_package(LAPACK REQUIRED)
-endif()
-
-message(STATUS "BLAS VENDOR:    " ${BLA_VENDOR})
-message(STATUS "BLAS LIBRARIES: " ${BLAS_LIBRARIES})
-
-
-find_package(xtensor REQUIRED)
-add_definitions(-DHAVE_CBLAS=1)

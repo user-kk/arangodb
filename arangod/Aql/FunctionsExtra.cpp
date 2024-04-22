@@ -1,9 +1,10 @@
 #include "Aql/AqlValue.h"
+#include "Aql/NdarrayOperator.hpp"
 #include "Functions.h"
 #include <cassert>
 #include <cstddef>
 #include <set>
-#include <sstream>
+#include <string>
 #include <utility>
 
 #include "Aql/AqlFunctionFeature.h"
@@ -411,22 +412,239 @@ AqlValue functions::MaxNWith(ExpressionContext* expressionContext,
   builder->close();
   return AqlValue(builder->slice(), builder->size());
 }
-AqlValue functions::ToArrayf(
+AqlValue functions::AggToNdArrayf(
     arangodb::aql::ExpressionContext* expressionContext, AstNode const&,
     VPackFunctionParametersView parameters) {
   THROW_ARANGO_EXCEPTION_MESSAGE(
       TRI_ERROR_QUERY_PARSE,
       "ToArrayf() must be invoked as aggregate function");
 }
-AqlValue functions::ToArrayd(arangodb::aql::ExpressionContext*, AstNode const&,
-                             VPackFunctionParametersView) {
+AqlValue functions::AggToNdArrayd(arangodb::aql::ExpressionContext*,
+                                  AstNode const&, VPackFunctionParametersView) {
   THROW_ARANGO_EXCEPTION_MESSAGE(
       TRI_ERROR_QUERY_PARSE,
       "ToArrayf() must be invoked as aggregate function");
 };
-AqlValue functions::ToArrayi(arangodb::aql::ExpressionContext*, AstNode const&,
-                             VPackFunctionParametersView) {
+AqlValue functions::AggToNdArrayi(arangodb::aql::ExpressionContext*,
+                                  AstNode const&, VPackFunctionParametersView) {
   THROW_ARANGO_EXCEPTION_MESSAGE(
       TRI_ERROR_QUERY_PARSE,
       "ToArrayf() must be invoked as aggregate function");
-};
+}
+
+AqlValue functions::ToNdArrayf(
+    arangodb::aql::ExpressionContext* expressionContext, AstNode const&,
+    VPackFunctionParametersView parameters) {
+  AqlValue value = extractFunctionParameterValue(parameters, 0);
+  AqlValue nameValue = extractFunctionParameterValue(parameters, 1);
+  AqlValue shapeValue = extractFunctionParameterValue(parameters, 2);
+  if (!value.isArray()) {
+    // not an array
+    registerWarning(expressionContext, "ToNdArrayf",
+                    TRI_ERROR_QUERY_ARRAY_EXPECTED);
+    return AqlValue(AqlValueHintNull());
+  }
+  if (!nameValue.isNone() && !nameValue.isArray()) {
+    registerWarning(expressionContext, "ToNdArrayf",
+                    TRI_ERROR_QUERY_ARRAY_EXPECTED);
+    return AqlValue(AqlValueHintNull());
+  }
+  if (!shapeValue.isNone() && !shapeValue.isArray()) {
+    registerWarning(expressionContext, "ToNdArrayf",
+                    TRI_ERROR_QUERY_ARRAY_EXPECTED);
+    return AqlValue(AqlValueHintNull());
+  }
+  std::vector<std::string> names;
+  if (!nameValue.isNone()) {
+    names.reserve(nameValue.length());
+    for (auto i : VPackArrayIterator(nameValue.slice())) {
+      names.push_back(i.toString());
+    }
+  }
+
+  std::vector<int> shape;
+  if (!shapeValue.isNone()) {
+    shape.reserve(shapeValue.length());
+    for (auto i : VPackArrayIterator(shapeValue.slice())) {
+      shape.push_back(i.getInt());
+    }
+  }
+
+  return AqlValue(Ndarray::fromVPackArray<float>(value.slice(), names, shape));
+}
+
+AqlValue functions::ToNdArrayd(
+    arangodb::aql::ExpressionContext* expressionContext, AstNode const&,
+    VPackFunctionParametersView parameters) {
+  AqlValue value = extractFunctionParameterValue(parameters, 0);
+  AqlValue nameValue = extractFunctionParameterValue(parameters, 1);
+  AqlValue shapeValue = extractFunctionParameterValue(parameters, 2);
+  if (!value.isArray()) {
+    // not an array
+    registerWarning(expressionContext, "ToNdArrayd",
+                    TRI_ERROR_QUERY_ARRAY_EXPECTED);
+    return AqlValue(AqlValueHintNull());
+  }
+  if (!nameValue.isNone() && !nameValue.isArray()) {
+    registerWarning(expressionContext, "ToNdArrayd",
+                    TRI_ERROR_QUERY_ARRAY_EXPECTED);
+    return AqlValue(AqlValueHintNull());
+  }
+  if (!shapeValue.isNone() && !shapeValue.isArray()) {
+    registerWarning(expressionContext, "ToNdArrayd",
+                    TRI_ERROR_QUERY_ARRAY_EXPECTED);
+    return AqlValue(AqlValueHintNull());
+  }
+  std::vector<std::string> names;
+  if (!nameValue.isNone()) {
+    names.reserve(nameValue.length());
+    for (auto i : VPackArrayIterator(nameValue.slice())) {
+      names.push_back(i.toString());
+    }
+  }
+
+  std::vector<int> shape;
+  if (!shapeValue.isNone()) {
+    shape.reserve(shapeValue.length());
+    for (auto i : VPackArrayIterator(shapeValue.slice())) {
+      shape.push_back(i.getInt());
+    }
+  }
+
+  return AqlValue(Ndarray::fromVPackArray<double>(value.slice(), names, shape));
+}
+
+AqlValue functions::ToNdArrayi(
+    arangodb::aql::ExpressionContext* expressionContext, AstNode const&,
+    VPackFunctionParametersView parameters) {
+  AqlValue value = extractFunctionParameterValue(parameters, 0);
+  AqlValue nameValue = extractFunctionParameterValue(parameters, 1);
+  AqlValue shapeValue = extractFunctionParameterValue(parameters, 2);
+  if (!value.isArray()) {
+    // not an array
+    registerWarning(expressionContext, "ToNdArrayi",
+                    TRI_ERROR_QUERY_ARRAY_EXPECTED);
+    return AqlValue(AqlValueHintNull());
+  }
+  if (!nameValue.isNone() && !nameValue.isArray()) {
+    registerWarning(expressionContext, "ToNdArrayi",
+                    TRI_ERROR_QUERY_ARRAY_EXPECTED);
+    return AqlValue(AqlValueHintNull());
+  }
+  if (!shapeValue.isNone() && !shapeValue.isArray()) {
+    registerWarning(expressionContext, "ToNdArrayi",
+                    TRI_ERROR_QUERY_ARRAY_EXPECTED);
+    return AqlValue(AqlValueHintNull());
+  }
+  std::vector<std::string> names;
+  if (!nameValue.isNone()) {
+    names.reserve(nameValue.length());
+    for (auto i : VPackArrayIterator(nameValue.slice())) {
+      names.push_back(i.toString());
+    }
+  }
+
+  std::vector<int> shape;
+  if (!shapeValue.isNone()) {
+    shape.reserve(shapeValue.length());
+    for (auto i : VPackArrayIterator(shapeValue.slice())) {
+      shape.push_back(i.getInt());
+    }
+  }
+
+  return AqlValue(Ndarray::fromVPackArray<int>(value.slice(), names, shape));
+}
+
+AqlValue functions::MatMul(ExpressionContext* expressionContext, AstNode const&,
+                           VPackFunctionParametersView parameters) {
+  AqlValue lhs = extractFunctionParameterValue(parameters, 0);
+  AqlValue rhs = extractFunctionParameterValue(parameters, 1);
+  if (lhs.canTurnIntoNdarray()) {
+    lhs.turnIntoNdarray();
+  }
+  if (rhs.canTurnIntoNdarray()) {
+    rhs.turnIntoNdarray();
+  }
+  if (!lhs.isNdArray() || !rhs.isNdArray()) {
+    // not a Ndarray
+    registerWarning(expressionContext, "MatMul",
+                    TRI_ERROR_QUERY_ARRAY_EXPECTED);
+    return AqlValue(AqlValueHintNull());
+  }
+  return AqlValue(Ndop::compute(*(lhs.getNdArray()), *(rhs.getNdArray()),
+                                Ndop::BinaryOperator::MATMUL));
+}
+
+AqlValue functions::MatTranspose(ExpressionContext* expressionContext,
+                                 AstNode const&,
+                                 VPackFunctionParametersView parameters) {
+  AqlValue value = extractFunctionParameterValue(parameters, 0);
+  AqlValue permutationValue = extractFunctionParameterValue(parameters, 1);
+  if (value.canTurnIntoNdarray()) {
+    value.turnIntoNdarray();
+  }
+  if (!value.isNdArray()) {
+    // not a Ndarray
+    registerWarning(expressionContext, "MatTranspose",
+                    TRI_ERROR_QUERY_ARRAY_EXPECTED);
+    return AqlValue(AqlValueHintNull());
+  }
+  if (!permutationValue.isNone() && !permutationValue.isArray()) {
+    registerWarning(expressionContext, "MatTranspose",
+                    TRI_ERROR_QUERY_ARRAY_EXPECTED);
+    return AqlValue(AqlValueHintNull());
+  }
+
+  std::vector<int> permutation;
+  if (!permutationValue.isNone()) {
+    permutation.reserve(permutationValue.length());
+    for (auto i : VPackArrayIterator(permutationValue.slice())) {
+      permutation.push_back(i.getInt());
+    }
+  }
+
+  return AqlValue(Ndop::transpose(value.getNdArray(), permutation));
+}
+
+AqlValue functions::Reshape(ExpressionContext* expressionContext,
+                            AstNode const&,
+                            VPackFunctionParametersView parameters) {
+  AqlValue value = extractFunctionParameterValue(parameters, 0);
+  AqlValue shapeValue = extractFunctionParameterValue(parameters, 1);
+  if (value.canTurnIntoNdarray()) {
+    value.turnIntoNdarray();
+  }
+  if (!value.isNdArray()) {
+    // not a Ndarray
+    registerWarning(expressionContext, "Reshape",
+                    TRI_ERROR_QUERY_ARRAY_EXPECTED);
+    return AqlValue(AqlValueHintNull());
+  }
+  if (!shapeValue.isArray() || shapeValue.length() == 0 ||
+      !shapeValue.slice().at(0).isInteger()) {
+    registerWarning(expressionContext, "Reshape",
+                    TRI_ERROR_QUERY_ARRAY_EXPECTED);
+    return AqlValue(AqlValueHintNull());
+  }
+  std::vector<int> shape;
+  shape.reserve(shapeValue.length());
+  for (auto i : VPackArrayIterator(shapeValue.slice())) {
+    shape.push_back(i.getInt());
+  }
+  return AqlValue(Ndop::reshape(value.getNdArray(), shape));
+}
+
+AqlValue functions::Inv(ExpressionContext* expressionContext, AstNode const&,
+                        VPackFunctionParametersView parameters) {
+  AqlValue value = extractFunctionParameterValue(parameters, 0);
+  if (value.canTurnIntoNdarray()) {
+    value.turnIntoNdarray();
+  }
+  if (!value.isNdArray()) {
+    // not a Ndarray
+    registerWarning(expressionContext, "Reshape",
+                    TRI_ERROR_QUERY_ARRAY_EXPECTED);
+    return AqlValue(AqlValueHintNull());
+  }
+  return AqlValue(Ndop::inv(value.getNdArray()));
+}

@@ -22,10 +22,12 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "AqlValue.h"
+#include <memory>
 
 #include "Aql/Arithmetic.h"
-#include "Aql/Ndarray.h"
+#include "Aql/Ndarray.hpp"
 #include "Aql/Range.h"
+#include "Assertions/Assert.h"
 #include "Basics/VelocyPackHelper.h"
 #include "Transaction/Context.h"
 #include "Transaction/Helpers.h"
@@ -37,7 +39,6 @@
 
 #include <velocypack/Buffer.h>
 #include <velocypack/Slice.h>
-#include <type_traits>
 
 #ifndef velocypack_malloc
 #error velocypack_malloc must be defined
@@ -136,6 +137,44 @@ bool AqlValue::isNumber() const noexcept {
       return VPackSlice{_data.slicePointerMeta.pointer}.isNumber();
     case VPACK_MANAGED_SLICE:
       return VPackSlice{_data.managedSliceMeta.pointer}.isNumber();
+    default:
+      return false;
+  }
+}
+
+bool AqlValue::isInt() const noexcept {
+  auto t = type();
+  switch (t) {
+    case VPACK_INLINE_INT64:
+    case VPACK_INLINE_UINT64:
+      return true;
+    case VPACK_INLINE_DOUBLE:
+      return false;
+    case VPACK_INLINE:
+      return VPackSlice{_data.inlineSliceMeta.slice}.isInteger();
+    case VPACK_SLICE_POINTER:
+      return VPackSlice{_data.slicePointerMeta.pointer}.isInteger();
+    case VPACK_MANAGED_SLICE:
+      return VPackSlice{_data.managedSliceMeta.pointer}.isInteger();
+    default:
+      return false;
+  }
+}
+
+bool AqlValue::isfloatOrDouble() const noexcept {
+  auto t = type();
+  switch (t) {
+    case VPACK_INLINE_INT64:
+    case VPACK_INLINE_UINT64:
+      return false;
+    case VPACK_INLINE_DOUBLE:
+      return true;
+    case VPACK_INLINE:
+      return VPackSlice{_data.inlineSliceMeta.slice}.isDouble();
+    case VPACK_SLICE_POINTER:
+      return VPackSlice{_data.slicePointerMeta.pointer}.isDouble();
+    case VPACK_MANAGED_SLICE:
+      return VPackSlice{_data.managedSliceMeta.pointer}.isDouble();
     default:
       return false;
   }
@@ -921,9 +960,41 @@ VPackSlice AqlValue::slice(AqlValueType type) const {
       return VPackSlice{_data.managedSliceMeta.pointer};
     case VPACK_MANAGED_STRING:
       return _data.managedStringMeta.toSlice();
+    case NDARRAY:
+      return _data.ndArrayMeta.pointer->getSlice();
     default:
       THROW_ARANGO_EXCEPTION(TRI_ERROR_ARANGO_DOCUMENT_TYPE_INVALID);
   }
+}
+bool AqlValue::isVackNdarray() const noexcept {
+  auto thisType = type();
+  if (thisType == VPACK_INLINE || thisType == VPACK_SLICE_POINTER ||
+      thisType == VPACK_MANAGED_SLICE) {
+    return Ndarray::checkIsNdarray(this->slice()) &&
+           Ndarray::NdarrayIsValid(this->slice());
+  }
+  return false;
+}
+
+void AqlValue::turnIntoNdarray() {
+  if (isNdArray()) {
+    return;
+  }
+  TRI_ASSERT(this->isVackNdarray());
+  Ndarray* ndarray = Ndarray::fromVpack(this->slice());
+  this->destroy();
+  _data.ndArrayMeta.pointer = ndarray;
+  setType(AqlValueType::NDARRAY);
+}
+
+std::variant<Ndarray*, std::unique_ptr<Ndarray>> AqlValue::getTurnIntoNdarray()
+    const {
+  if (isNdArray()) {
+    return _data.ndArrayMeta.pointer;
+  }
+  TRI_ASSERT(this->isVackNdarray());
+  Ndarray* ndarray = Ndarray::fromVpack(this->slice());
+  return std::unique_ptr<Ndarray>{ndarray};
 }
 
 int AqlValue::Compare(velocypack::Options const* options, AqlValue const& left,

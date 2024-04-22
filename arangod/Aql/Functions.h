@@ -311,12 +311,26 @@ AqlValue MaxN(arangodb::aql::ExpressionContext*, AstNode const&,
               VPackFunctionParametersView);
 AqlValue MaxNWith(arangodb::aql::ExpressionContext*, AstNode const&,
                   VPackFunctionParametersView);
-AqlValue ToArrayf(arangodb::aql::ExpressionContext*, AstNode const&,
-                  VPackFunctionParametersView);
-AqlValue ToArrayd(arangodb::aql::ExpressionContext*, AstNode const&,
-                  VPackFunctionParametersView);
-AqlValue ToArrayi(arangodb::aql::ExpressionContext*, AstNode const&,
-                  VPackFunctionParametersView);
+AqlValue AggToNdArrayf(arangodb::aql::ExpressionContext*, AstNode const&,
+                       VPackFunctionParametersView);
+AqlValue AggToNdArrayd(arangodb::aql::ExpressionContext*, AstNode const&,
+                       VPackFunctionParametersView);
+AqlValue AggToNdArrayi(arangodb::aql::ExpressionContext*, AstNode const&,
+                       VPackFunctionParametersView);
+AqlValue ToNdArrayf(arangodb::aql::ExpressionContext*, AstNode const&,
+                    VPackFunctionParametersView);
+AqlValue ToNdArrayd(arangodb::aql::ExpressionContext*, AstNode const&,
+                    VPackFunctionParametersView);
+AqlValue ToNdArrayi(arangodb::aql::ExpressionContext*, AstNode const&,
+                    VPackFunctionParametersView);
+AqlValue MatMul(arangodb::aql::ExpressionContext*, AstNode const&,
+                VPackFunctionParametersView);
+AqlValue MatTranspose(arangodb::aql::ExpressionContext*, AstNode const&,
+                      VPackFunctionParametersView);
+AqlValue Reshape(arangodb::aql::ExpressionContext*, AstNode const&,
+                 VPackFunctionParametersView);
+AqlValue Inv(arangodb::aql::ExpressionContext*, AstNode const&,
+             VPackFunctionParametersView);
 AqlValue Sum(arangodb::aql::ExpressionContext*, AstNode const&,
              VPackFunctionParametersView);
 AqlValue Average(arangodb::aql::ExpressionContext*, AstNode const&,

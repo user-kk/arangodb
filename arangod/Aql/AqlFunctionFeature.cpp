@@ -64,7 +64,7 @@ void AqlFunctionFeature::prepare() {
   addDateFunctions();
   addMiscFunctions();
   addAggregateFunctions();
-  addArrayFunctions();
+  addNdArrayFunctions();
 }
 
 void AqlFunctionFeature::add(Function const& func) {
@@ -629,10 +629,21 @@ void AqlFunctionFeature::addMiscFunctions() {
 void AqlFunctionFeature::addAggregateFunctions() {
   add({"GET_GROUP", ".", Function::makeFlags(), &functions::GetGroup});
 };
-void AqlFunctionFeature::addArrayFunctions() {
-  add({"TOARRAYF", ".,.|+", Function::makeFlags(), &functions::ToArrayf});
-  add({"TOARRAYD", ".,.|+", Function::makeFlags(), &functions::ToArrayd});
-  add({"TOARRAYI", ".,.|+", Function::makeFlags(), &functions::ToArrayi});
+void AqlFunctionFeature::addNdArrayFunctions() {
+  add({"AGG_TO_NDARRAYF", ".,.|+", Function::makeFlags(),
+       &functions::AggToNdArrayf});
+  add({"AGG_TO_NDARRAYD", ".,.|+", Function::makeFlags(),
+       &functions::AggToNdArrayd});
+  add({"AGG_TO_NDARRAYI", ".,.|+", Function::makeFlags(),
+       &functions::AggToNdArrayi});
+  add({"TO_NDARRAYF", ".|+", Function::makeFlags(), &functions::ToNdArrayf});
+  add({"TO_NDARRAYD", ".|+", Function::makeFlags(), &functions::ToNdArrayd});
+  add({"TO_NDARRAYI", ".|+", Function::makeFlags(), &functions::ToNdArrayi});
+  add({"MAT_MUL", ".,.", Function::makeFlags(), &functions::MatMul});
+  add({"MAT_TRANSPOSE", ".|+", Function::makeFlags(),
+       &functions::MatTranspose});
+  add({"MAT_INV", ".", Function::makeFlags(), &functions::Inv});
+  add({"RESHAPE", ".,.", Function::makeFlags(), &functions::Reshape});
 };
 }  // namespace aql
 }  // namespace arangodb

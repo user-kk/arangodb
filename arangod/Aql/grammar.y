@@ -583,6 +583,9 @@ AstNode* transformOutputVariables(Parser* parser, AstNode const* names) {
 %type <node> group_by_statements;
 %type <node> having_statements;
 %type <boolval> distinct_label;
+%type <node> expression_or_none;
+%type <node> interval_element;
+
 
 /* define start token of language */
 %start queryStart
@@ -2272,17 +2275,20 @@ reference:
     $1->setFlag(FLAG_TIMES);
     $$ = $1;
   }
-  | reference T_ARRAY_OPEN expression T_ARRAY_CLOSE %prec INDEXED {
+  | reference T_ARRAY_OPEN {      
+      auto node = parser->ast()->createNodeArray();
+      parser->pushArray(node);
+    } ndarray_expression_list T_ARRAY_CLOSE %prec INDEXED {
       // indexed variable access, e.g. variable[index]
       if ($1->type == NODE_TYPE_EXPANSION) {
         // if left operand is an expansion already...
         // patch the existing expansion
         auto current = const_cast<AstNode*>(parser->ast()->findExpansionSubNode($1));
         TRI_ASSERT(current->type == NODE_TYPE_EXPANSION);
-        current->changeMember(1, parser->ast()->createNodeIndexedAccess(current->getMember(1), $3));
+        current->changeMember(1, parser->ast()->createNodeIndexedAccess(current->getMember(1),parser->popArray()));
         $$ = $1;
       } else {
-        $$ = parser->ast()->createNodeIndexedAccess($1, $3);
+        $$ = parser->ast()->createNodeIndexedAccess($1, parser->popArray());
       }
     }
   | reference T_ARRAY_OPEN array_filter_operator {
@@ -2372,6 +2378,41 @@ reference:
       }
     }
   ;
+
+ndarray_expression_list:
+    ndarray_expression {
+
+    }
+  | ndarray_expression_list T_COMMA ndarray_expression {
+
+    }
+  ;
+ndarray_expression :
+    expression {
+      parser->pushArrayElement($1);
+    }
+  | expression_or_none T_COLON expression_or_none interval_element{
+      parser->pushArrayElement(parser->ast()->createNodeRangeIndexed($1,$3,$4));
+    }
+  ;
+
+expression_or_none:
+    /*empty*/ {
+      $$ = parser->ast()->createNodeNop();
+    }
+  | expression {
+      $$ = $1;
+    }
+  ;
+interval_element:
+  /*empty*/ {
+      $$ = parser->ast()->createNodeNop();
+    }
+  | T_COLON expression {
+      $$ = $2;
+    }
+  ;
+
 
 simple_value:
     value_literal {

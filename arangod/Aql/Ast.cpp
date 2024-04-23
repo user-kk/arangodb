@@ -1241,7 +1241,23 @@ AstNode* Ast::createNodeIndexedAccess(AstNode const* accessed,
   AstNode* node = createNode(NODE_TYPE_INDEXED_ACCESS);
   node->reserve(2);
   node->addMember(accessed);
+  if (indexValue->type == NODE_TYPE_ARRAY && indexValue->numMembers() == 1) {
+    node->addMember(indexValue->getMemberUnchecked(0));
+    return node;
+  }
   node->addMember(indexValue);
+
+  return node;
+}
+
+AstNode* Ast::createNodeRangeIndexed(AstNode const* begin, AstNode const* end,
+                                     AstNode const* stride) {
+  AstNode* node = createNode(NODE_TYPE_RANGE_INDEX);
+  node->reserve(3);
+  TRI_ASSERT(begin != nullptr && end != nullptr && stride != nullptr);
+  node->addMember(begin);
+  node->addMember(end);
+  node->addMember(stride);
 
   return node;
 }

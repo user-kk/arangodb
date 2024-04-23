@@ -351,6 +351,10 @@ class Ast {
   /// @brief create an AST index access node
   AstNode* createNodeIndexedAccess(AstNode const*, AstNode const*);
 
+  /// @brief create an AST range index  node
+  AstNode* createNodeRangeIndexed(AstNode const*, AstNode const*,
+                                  AstNode const*);
+
   /// @brief create an AST array limit node (offset, count)
   AstNode* createNodeArrayLimit(AstNode const*, AstNode const*);
 

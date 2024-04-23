@@ -32,6 +32,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <xtensor/xstrided_view.hpp>
 
 #ifdef USE_V8
 #include <v8.h>
@@ -201,6 +202,10 @@ class Expression {
                                                        AstNode const*,
                                                        bool& mustDestroy,
                                                        bool doCopy);
+  // 形成一个范围索引的数组
+  static AqlValue executeSimpleExpressionBuildRangeIndex(ExpressionContext& ctx,
+                                                         AstNode const*,
+                                                         bool& mustDestroy);
 
   // execute an expression of type SIMPLE with ARRAY
   static AqlValue executeSimpleExpressionArray(ExpressionContext& ctx,
@@ -299,6 +304,9 @@ class Expression {
   static AqlValue executeSimpleExpressionArithmetic(ExpressionContext& ctx,
                                                     AstNode const*,
                                                     bool& mustDestroy);
+
+  static void executeRangeIndexFormat(ExpressionContext& ctx, VPackSlice array,
+                                      xt::xstrided_slice_vector& vector);
 
   // the AST
   Ast* _ast;

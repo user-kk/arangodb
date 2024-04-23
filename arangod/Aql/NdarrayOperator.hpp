@@ -1,5 +1,6 @@
 #include <xtensor-blas/xlinalg.hpp>
 #include <xtensor/xmath.hpp>
+#include <xtensor/xstrided_view.hpp>
 #include <xtensor/xtensor_forward.hpp>
 #include "Ndarray.hpp"
 namespace arangodb {
@@ -236,6 +237,21 @@ class NdarrayOperator {
       ret->_data = std::move(v);
       ret->_type = Ndarray::FLOAT_TYPE;
     }
+    return ret;
+  }
+  static Ndarray* slice(Ndarray* array, const xt::xstrided_slice_vector& k) {
+    Ndarray* ret = new Ndarray;
+    if (array->_type == Ndarray::INT_TYPE) {
+      xt::xarray<int> v = xt::strided_view(array->get<int>(), k);
+      ret->_data = std::move(v);
+    } else if (array->_type == Ndarray::DOUBLE_TYPE) {
+      xt::xarray<double> v = xt::strided_view(array->get<double>(), k);
+      ret->_data = std::move(v);
+    } else if (array->_type == Ndarray::FLOAT_TYPE) {
+      xt::xarray<float> v = xt::strided_view(array->get<float>(), k);
+      ret->_data = std::move(v);
+    }
+    ret->_type = array->_type;
     return ret;
   }
 

@@ -3,6 +3,8 @@
 #include <velocypack/Builder.h>
 #include <velocypack/Iterator.h>
 #include <velocypack/Slice.h>
+#include <velocypack/Value.h>
+#include <velocypack/ValueType.h>
 #include <cstddef>
 #include <memory>
 #include <numeric>
@@ -58,6 +60,20 @@ class Ndarray {
   using DataType =
       std::variant<xt::xarray<int>, xt::xarray<float>, xt::xarray<double>>;
 
+  template<typename T>
+  auto& get() {
+    return std::get<xt::xarray<T>>(_data);
+  }
+
+  template<typename T>
+  const auto& get() const {
+    return std::get<xt::xarray<T>>(_data);
+  }
+
+  bool empty() {
+    return std::visit([](auto data) { return data.begin() == data.end(); },
+                      _data);
+  }
   auto shape() {
     return std::visit([](auto& data) { return data.shape(); }, _data);
   }
@@ -65,6 +81,28 @@ class Ndarray {
   void toVPack(VPackBuilder& builder) {
     // 断言当前一定被初始化了
     TRI_ASSERT(_type != ERROR);
+
+    if (this->dimension() == 0) {
+      switch (_type) {
+        case INT_TYPE: {
+          builder.add(VPackValue(this->get<int>()[{}]));
+          break;
+        }
+        case FLOAT_TYPE: {
+          builder.add(VPackValue(this->get<float>()[{}]));
+          break;
+        }
+        case DOUBLE_TYPE: {
+          builder.add(VPackValue(this->get<double>()[{}]));
+          break;
+        }
+        case ERROR: {
+          builder.add(VPackValue(VPackValueType::Null));
+          break;
+        }
+      }
+      return;
+    }
 
     auto thisShape = shape();
     builder.openObject();
@@ -220,16 +258,6 @@ class Ndarray {
 
   bool operator==(const Ndarray& other) { return this->_data == other._data; }
   bool operator!=(const Ndarray& other) { return this->_data != other._data; }
-
-  template<typename T>
-  auto& get() {
-    return std::get<xt::xarray<T>>(_data);
-  }
-
-  template<typename T>
-  const auto& get() const {
-    return std::get<xt::xarray<T>>(_data);
-  }
 
   size_t getMemoryUsage() {
     size_t usage = 0;

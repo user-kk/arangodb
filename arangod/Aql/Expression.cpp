@@ -26,18 +26,21 @@
 #include "Aql/AqlItemBlock.h"
 #include "Aql/AqlValue.h"
 #include "Aql/Ast.h"
+#include "Aql/AstNode.h"
 #include "Aql/AttributeAccessor.h"
 #include "Aql/ExecutionNode.h"
 #include "Aql/ExecutionPlan.h"
 #include "Aql/ExpressionContext.h"
 #include "Aql/Function.h"
 #include "Aql/Functions.h"
+#include "Aql/Ndarray.hpp"
 #include "Aql/NdarrayOperator.hpp"
 #include "Aql/Quantifier.h"
 #include "Aql/Query.h"
 #include "Aql/QueryContext.h"
 #include "Aql/QueryExpressionContext.h"
 #include "Aql/Range.h"
+#include "Assertions/Assert.h"
 #ifdef USE_V8
 #include "Aql/V8ErrorHandler.h"
 #endif
@@ -503,13 +506,54 @@ AqlValue Expression::executeSimpleExpression(ExpressionContext& ctx,
           TRI_ERROR_NOT_IMPLEMENTED,
           absl::StrCat("node type '", node->getTypeString(),
                        "' is not supported in expressions"));
-
+    case NODE_TYPE_RANGE_INDEX:
+      return executeSimpleExpressionBuildRangeIndex(ctx, node, mustDestroy);
     default:
       std::string msg("unhandled type '");
       msg.append(node->getTypeString());
       msg.append("' in executeSimpleExpression()");
       THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_INTERNAL, msg);
   }
+}
+
+AqlValue Expression::executeSimpleExpressionBuildRangeIndex(
+    ExpressionContext& ctx, AstNode const* node, bool& mustDestroy) {
+  mustDestroy = false;
+  if (node->isConstant()) {
+    // this will not create a copy
+    uint8_t const* cv = node->computedValue();
+    if (cv != nullptr) {
+      return AqlValue(cv);
+    }
+    transaction::BuilderLeaser builder(&ctx.trx());
+    return AqlValue(node->computeValue(builder.get()).begin());
+  }
+  size_t const n = node->numMembers();
+
+  TRI_ASSERT(n == 3);
+
+  auto& trx = ctx.trx();
+
+  transaction::BuilderLeaser builder(&trx);
+  builder->openArray();
+
+  for (size_t i = 0; i < n; ++i) {
+    auto member = node->getMemberUnchecked(i);
+    if (member->type != NODE_TYPE_NOP) {
+      bool localMustDestroy = false;
+      AqlValue result =
+          executeSimpleExpression(ctx, member, localMustDestroy, false);
+      AqlValueGuard guard(result, localMustDestroy);
+      result.toVelocyPack(&trx.vpackOptions(), *builder.get(),
+                          /*allowUnindexed*/ false);
+    } else {
+      builder->add(VPackValue(VPackValueType::Null));
+    }
+  }
+
+  builder->close();
+  mustDestroy = true;  // AqlValue contains builder contains dynamic data
+  return AqlValue(builder->slice(), builder->size());
 }
 
 /// @brief check whether this is an attribute access of any degree (e.g. a.b,
@@ -632,9 +676,114 @@ AqlValue Expression::executeSimpleExpressionIndexedAccess(
     }
 
     // fall-through to returning null
+  } else if (result.canTurnIntoNdarray()) {
+    result.turnIntoNdarray();
+    AqlValue indexResult =
+        executeSimpleExpression(ctx, index, mustDestroy, false);
+
+    AqlValueGuard guardIdx(indexResult, mustDestroy);
+
+    size_t dimension = result.getNdArray()->dimension();
+    auto shape = result.getNdArray()->shape();
+
+    xt::xstrided_slice_vector stridedSliceVector;
+    if (indexResult.isInt()) {
+      if (dimension != 1) {
+        ctx.registerError(TRI_ERROR_QUERY_PARSE, "index dimension error");
+        return AqlValue(AqlValueHintNull());
+      }
+      if (indexResult.toInt64() < 0 ||
+          indexResult.toInt64() >= static_cast<int64_t>(shape[0])) {
+        ctx.registerError(TRI_ERROR_QUERY_PARSE, "out of range");
+        return AqlValue(AqlValueHintNull());
+      }
+      stridedSliceVector.push_back(indexResult.toInt64());
+    } else if (indexResult.isArray()) {
+      if (dimension != indexResult.length()) {
+        ctx.registerError(TRI_ERROR_QUERY_PARSE, "index dimension error");
+        return AqlValue(AqlValueHintNull());
+      }
+      size_t n = 0;
+      for (auto i : VPackArrayIterator(indexResult.slice())) {
+        if (i.isArray()) {
+          TRI_ASSERT(i.length() == 3);
+          executeRangeIndexFormat(ctx, i, stridedSliceVector);
+
+        } else if (i.isInteger()) {
+          if (i.getInt() < 0 || i.getInt() >= static_cast<int64_t>(shape[n])) {
+            ctx.registerError(TRI_ERROR_QUERY_PARSE, "out of range");
+            return AqlValue(AqlValueHintNull());
+          }
+          stridedSliceVector.push_back(i.getInt());
+        } else {
+          ctx.registerError(TRI_ERROR_QUERY_PARSE, "range index format error");
+          return AqlValue(AqlValueHintNull());
+        }
+        n++;
+      }
+    } else {
+      ctx.registerError(TRI_ERROR_QUERY_PARSE, "range index format error");
+      return AqlValue(AqlValueHintNull());
+    }
+    Ndarray* ndarray = Ndop::slice(result.getNdArray(), stridedSliceVector);
+    if (ndarray->empty()) {
+      delete ndarray;
+      ctx.registerError(TRI_ERROR_QUERY_PARSE, "out of range");
+      return AqlValue(AqlValueHintNull());
+    }
+    return AqlValue(ndarray);
   }
 
   return AqlValue(AqlValueHintNull());
+}
+
+void Expression::executeRangeIndexFormat(ExpressionContext& ctx,
+                                         VPackSlice array,
+                                         xt::xstrided_slice_vector& vector) {
+  using namespace xt::placeholders;
+
+  if (array.at(0).isNull()) {
+    if (array.at(1).isNull()) {
+      if (array.at(2).isNull()) {  // :
+        vector.push_back(xt::all());
+        return;
+      } else if (array.at(2).isInteger()) {  // : :a
+        vector.push_back(xt::range(_, _, array.at(2).getInt()));
+        return;
+      }
+    } else if (array.at(1).isInteger() && array.at(1).getInt() >= 0) {
+      if (array.at(2).isNull()) {  // :a
+        vector.push_back(xt::range(_, array.at(1).getInt()));
+        return;
+      } else if (array.at(2).isInteger()) {  // :a:b 不允许
+        vector.push_back(
+            xt::range(_, array.at(1).getInt(), array.at(2).getInt()));
+        return;
+      }
+    }
+  } else if (array.at(0).isInteger() && array.at(0).getInt() >= 0) {
+    if (array.at(1).isNull()) {
+      if (array.at(2).isNull()) {  // a:
+        vector.push_back(xt::range(array.at(0).getInt(), _));
+        return;
+      } else if (array.at(2).isInteger()) {  // a:_:b
+        vector.push_back(
+            xt::range(array.at(0).getInt(), _, array.at(2).getInt()));
+        return;
+      }
+    } else if (array.at(1).isInteger() && array.at(1).getInt() >= 0) {
+      if (array.at(2).isNull()) {  // a:b
+        vector.push_back(xt::range(array.at(0).getInt(), array.at(1).getInt()));
+        return;
+      } else if (array.at(2).isInteger()) {  // a:b:c
+        vector.push_back(xt::range(array.at(0).getInt(), array.at(1).getInt(),
+                                   array.at(2).getInt()));
+        return;
+      }
+    }
+  }
+
+  ctx.registerError(TRI_ERROR_QUERY_PARSE, "range index format error");
 }
 
 // execute an expression of type SIMPLE with ARRAY
@@ -1937,8 +2086,9 @@ AqlValue Expression::executeSimpleExpressionArithmetic(ExpressionContext& ctx,
       } else if (rhs.isfloatOrDouble()) {
         return AqlValue(Ndop::compute(*(lhs.getNdArray()), rhs.toDouble(), op));
       } else {
-        THROW_ARANGO_EXCEPTION_MESSAGE(
-            TRI_ERROR_QUERY_PARSE, "ndarry calculations with the wrong type ");
+        ctx.registerError(TRI_ERROR_QUERY_PARSE,
+                          "ndarry calculations with the wrong type ");
+        return AqlValue(AqlValueHintNull());
       }
     } else {
       if (lhs.isInt()) {
@@ -1947,8 +2097,9 @@ AqlValue Expression::executeSimpleExpressionArithmetic(ExpressionContext& ctx,
       } else if (lhs.isfloatOrDouble()) {
         return AqlValue(Ndop::compute(lhs.toDouble(), *(rhs.getNdArray()), op));
       } else {
-        THROW_ARANGO_EXCEPTION_MESSAGE(
-            TRI_ERROR_QUERY_PARSE, "ndarry calculations with the wrong type ");
+        ctx.registerError(TRI_ERROR_QUERY_PARSE,
+                          "ndarry calculations with the wrong type ");
+        return AqlValue(AqlValueHintNull());
       }
     }
   }

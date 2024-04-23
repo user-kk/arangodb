@@ -651,6 +651,7 @@ AstNode::AstNode(Ast* ast, arangodb::velocypack::Slice slice)
     case NODE_TYPE_FOR_VIEW:
     case NODE_TYPE_WINDOW:
     case NODE_TYPE_ARRAY_FILTER:
+    case NODE_TYPE_RANGE_INDEX:  // TODO :这个种类可能会有问题
       break;
   }
 
@@ -1096,6 +1097,21 @@ void AstNode::toVelocyPackValue(VPackBuilder& builder) const {
     builder.add(VPackValue(VPackValueType::Null));
   }
 
+  if (type == NODE_TYPE_RANGE_INDEX) {
+    builder.openArray(/*allowUnindexed*/ false);
+    size_t const n = numMembers();
+    TRI_ASSERT(n == 3);
+    for (size_t i = 0; i < n; ++i) {
+      auto member = getMemberUnchecked(i);
+      if (member->type != NODE_TYPE_NOP) {
+        member->toVelocyPackValue(builder);
+      } else {
+        builder.add(VPackValue(VPackValueType::Null));
+      }
+    }
+    builder.close();
+    return;
+  }
   // Do not add anything.
 }
 

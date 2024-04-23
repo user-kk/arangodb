@@ -45,6 +45,7 @@
 #include <functional>
 #include <iterator>
 #include <memory>
+#include <optional>
 #include <set>
 #include <utility>
 #include <vector>
@@ -734,14 +735,16 @@ struct AggregatorToNdArrayf final : public AggregatorNeedDynamicMemory {
     static constexpr uint64_t MaterializationLimit = 10ULL * 1000ULL * 1000ULL;
     size_t n = 1;
     std::vector<size_t> shape;
-    std::vector<std::string> axisNames;
+    std::vector<std::optional<std::string>> axisNames;
     shape.reserve(dimensions);
     for (auto const& i : arangodb::velocypack::ArrayIterator(infoSlice)) {
       int length = 0;
       try {
         length = i["length"].getInt();
-        if (i.hasKey("axis")) {
+        if (i.hasKey("axis") && i["axis"].isString()) {
           axisNames.push_back(i["axis"].copyString());
+        } else {
+          axisNames.push_back(std::nullopt);
         }
       } catch (arangodb::velocypack::Exception e) {
         THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
@@ -827,14 +830,16 @@ struct AggregatorToNdArrayd final : public AggregatorNeedDynamicMemory {
     static constexpr uint64_t MaterializationLimit = 10ULL * 1000ULL * 1000ULL;
     size_t n = 1;
     std::vector<size_t> shape;
-    std::vector<std::string> axisNames;
+    std::vector<std::optional<std::string>> axisNames;
     shape.reserve(dimensions);
     for (auto const& i : arangodb::velocypack::ArrayIterator(infoSlice)) {
       int length = 0;
       try {
         length = i["length"].getInt();
-        if (i.hasKey("axis")) {
+        if (i.hasKey("axis") && i["axis"].isString()) {
           axisNames.push_back(i["axis"].copyString());
+        } else {
+          axisNames.push_back(std::nullopt);
         }
       } catch (arangodb::velocypack::Exception e) {
         THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
@@ -919,14 +924,16 @@ struct AggregatorToNdArrayi final : public AggregatorNeedDynamicMemory {
     static constexpr uint64_t MaterializationLimit = 10ULL * 1000ULL * 1000ULL;
     size_t n = 1;
     std::vector<size_t> shape;
-    std::vector<std::string> axisNames;
+    std::vector<std::optional<std::string>> axisNames;
     shape.reserve(dimensions);
     for (auto const& i : arangodb::velocypack::ArrayIterator(infoSlice)) {
       int length = 0;
       try {
         length = i["length"].getInt();
-        if (i.hasKey("axis")) {
+        if (i.hasKey("axis") && i["axis"].isString()) {
           axisNames.push_back(i["axis"].copyString());
+        } else {
+          axisNames.push_back(std::nullopt);
         }
       } catch (arangodb::velocypack::Exception e) {
         THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,

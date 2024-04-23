@@ -454,11 +454,15 @@ AqlValue functions::ToNdArrayf(
                     TRI_ERROR_QUERY_ARRAY_EXPECTED);
     return AqlValue(AqlValueHintNull());
   }
-  std::vector<std::string> names;
+  std::vector<std::optional<std::string>> names;
   if (!nameValue.isNone()) {
     names.reserve(nameValue.length());
     for (auto i : VPackArrayIterator(nameValue.slice())) {
-      names.push_back(i.toString());
+      if (i.isString()) {
+        names.push_back(i.toString());
+      } else {
+        names.push_back(std::nullopt);
+      }
     }
   }
 
@@ -495,11 +499,15 @@ AqlValue functions::ToNdArrayd(
                     TRI_ERROR_QUERY_ARRAY_EXPECTED);
     return AqlValue(AqlValueHintNull());
   }
-  std::vector<std::string> names;
+  std::vector<std::optional<std::string>> names;
   if (!nameValue.isNone()) {
     names.reserve(nameValue.length());
     for (auto i : VPackArrayIterator(nameValue.slice())) {
-      names.push_back(i.toString());
+      if (i.isString()) {
+        names.push_back(i.toString());
+      } else {
+        names.push_back(std::nullopt);
+      }
     }
   }
 
@@ -536,11 +544,15 @@ AqlValue functions::ToNdArrayi(
                     TRI_ERROR_QUERY_ARRAY_EXPECTED);
     return AqlValue(AqlValueHintNull());
   }
-  std::vector<std::string> names;
+  std::vector<std::optional<std::string>> names;
   if (!nameValue.isNone()) {
     names.reserve(nameValue.length());
     for (auto i : VPackArrayIterator(nameValue.slice())) {
-      names.push_back(i.toString());
+      if (i.isString()) {
+        names.push_back(i.toString());
+      } else {
+        names.push_back(std::nullopt);
+      }
     }
   }
 
@@ -647,4 +659,20 @@ AqlValue functions::Inv(ExpressionContext* expressionContext, AstNode const&,
     return AqlValue(AqlValueHintNull());
   }
   return AqlValue(Ndop::inv(value.getNdArray()));
+}
+
+AqlValue functions::DocumentView(
+    arangodb::aql::ExpressionContext* expressionContext, AstNode const&,
+    VPackFunctionParametersView parameters) {
+  AqlValue value = extractFunctionParameterValue(parameters, 0);
+  if (value.isVackNdarray()) {
+    return value;
+  }
+
+  if (value.isNdArray()) {
+    return AqlValue(value.slice());
+  }
+  registerWarning(expressionContext, "DocumentView",
+                  TRI_ERROR_QUERY_ARRAY_EXPECTED);
+  return AqlValue(AqlValueHintNull());
 }

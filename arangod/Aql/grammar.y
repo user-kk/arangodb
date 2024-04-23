@@ -2744,7 +2744,8 @@ select_element:
         parser->disableNULLAlia();
         //TODO : 名称冲突换成临时名
         parser->pushObjectElement($1->getStringValue(), $1->getStringLength(), $1);
-        if(!$1->hasFlag(FLAG_TIMES)){//.*语法创建的不生成别名
+        //.*语法创建的不生成别名,NODE_TYPE_COLLECTION也不生成别名
+        if(!$1->hasFlag(FLAG_TIMES) && $1->type != NODE_TYPE_COLLECTION){
           parser->pushAliasQueue($1,$1->getStringView());
         }
       }else{

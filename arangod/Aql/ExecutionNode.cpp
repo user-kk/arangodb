@@ -1937,7 +1937,8 @@ AsyncPrefetchEligibility EnumerateCollectionNode::canUseAsyncPrefetching()
 
 EnumerateListNode::EnumerateListNode(ExecutionPlan* plan, ExecutionNodeId id,
                                      Variable const* inVariable,
-                                     Variable const* outVariable)
+                                     Variable const* outVariable,
+                                     AstNode* option)
     : ExecutionNode(plan, id),
       _inVariable(inVariable),
       _outVariable(outVariable) {
@@ -1997,7 +1998,7 @@ std::unique_ptr<ExecutionBlock> EnumerateListNode::createBlock(
   }
   auto executorInfos = EnumerateListExecutorInfos(
       inputRegister, outRegister, engine.getQuery(), filter(), _outVariable->id,
-      std::move(varsToRegs));
+      std::move(varsToRegs), _forNdarray);
   return std::make_unique<ExecutionBlockImpl<EnumerateListExecutor>>(
       &engine, this, std::move(registerInfos), std::move(executorInfos));
 }
@@ -2007,6 +2008,7 @@ ExecutionNode* EnumerateListNode::clone(ExecutionPlan* plan,
                                         bool withDependencies) const {
   auto c =
       std::make_unique<EnumerateListNode>(plan, _id, _inVariable, _outVariable);
+  c->_forNdarray = _forNdarray;
 
   if (hasFilter()) {
     c->setFilter(_filter->clone(plan->getAst(), true));

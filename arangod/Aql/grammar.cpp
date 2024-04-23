@@ -1132,9 +1132,9 @@ static const yytype_int16 yyrline[] =
     2500,  2507,  2510,  2515,  2526,  2532,  2532,  2526,  2575,  2578,
     2584,  2587,  2593,  2599,  2602,  2608,  2612,  2618,  2621,  2628,
     2628,  2643,  2643,  2680,  2683,  2688,  2691,  2696,  2712,  2715,
-    2721,  2724,  2729,  2739,  2764,  2766,  2774,  2794,  2794,  2822,
-    2822,  2832,  2836,  2841,  2849,  2852,  2857,  2859,  2859,  2870,
-    2872
+    2721,  2724,  2729,  2739,  2765,  2767,  2775,  2795,  2795,  2823,
+    2823,  2833,  2837,  2842,  2850,  2853,  2858,  2860,  2860,  2871,
+    2873
 };
 #endif
 
@@ -6237,7 +6237,8 @@ yyreduce:
         parser->disableNULLAlia();
         //TODO : 名称冲突换成临时名
         parser->pushObjectElement((yyvsp[0].node)->getStringValue(), (yyvsp[0].node)->getStringLength(), (yyvsp[0].node));
-        if(!(yyvsp[0].node)->hasFlag(FLAG_TIMES)){//.*语法创建的不生成别名
+        //.*语法创建的不生成别名,NODE_TYPE_COLLECTION也不生成别名
+        if(!(yyvsp[0].node)->hasFlag(FLAG_TIMES) && (yyvsp[0].node)->type != NODE_TYPE_COLLECTION){
           parser->pushAliasQueue((yyvsp[0].node),(yyvsp[0].node)->getStringView());
         }
       }else{
@@ -6252,28 +6253,28 @@ yyreduce:
         }
       }
     }
-#line 6255 "grammar.cpp"
+#line 6256 "grammar.cpp"
     break;
 
   case 314: /* where_statements: %empty  */
-#line 2764 "grammar.y"
+#line 2765 "grammar.y"
                 {
     }
-#line 6262 "grammar.cpp"
+#line 6263 "grammar.cpp"
     break;
 
   case 315: /* where_statements: "where" expression  */
-#line 2766 "grammar.y"
+#line 2767 "grammar.y"
                        {
       // operand is a reference. can use it directly
       auto node = parser->ast()->createNodeFilter((yyvsp[0].node));
       parser->ast()->addOperation(node);
     }
-#line 6272 "grammar.cpp"
+#line 6273 "grammar.cpp"
     break;
 
   case 316: /* group_by_statements: %empty  */
-#line 2774 "grammar.y"
+#line 2775 "grammar.y"
                 {
       //检查是否有聚集
       parser->produceAggregateStep1();
@@ -6294,17 +6295,17 @@ yyreduce:
       parser->produceAggAlias();
 
     }
-#line 6297 "grammar.cpp"
+#line 6298 "grammar.cpp"
     break;
 
   case 317: /* $@26: %empty  */
-#line 2794 "grammar.y"
+#line 2795 "grammar.y"
                            {parser->produceAggregateStep1();}
-#line 6303 "grammar.cpp"
+#line 6304 "grammar.cpp"
     break;
 
   case 318: /* group_by_statements: group_by_variable_list $@26 having_statements  */
-#line 2794 "grammar.y"
+#line 2795 "grammar.y"
                                                                                 {
 
       parser->setHaving((yyvsp[0].node));
@@ -6331,115 +6332,115 @@ yyreduce:
         parser->ast()->addOperation(filterNode);
       }
     }
-#line 6334 "grammar.cpp"
+#line 6335 "grammar.cpp"
     break;
 
   case 319: /* $@27: %empty  */
-#line 2822 "grammar.y"
+#line 2823 "grammar.y"
                  {
       auto node = parser->ast()->createNodeArray();
       parser->pushStack(node);
     }
-#line 6343 "grammar.cpp"
+#line 6344 "grammar.cpp"
     break;
 
   case 320: /* group_by_variable_list: "group" "by" $@27 group_by_list  */
-#line 2825 "grammar.y"
+#line 2826 "grammar.y"
                     {
       auto list = static_cast<AstNode*>(parser->popStack());
       TRI_ASSERT(list != nullptr);
       (yyval.node) = list;
     }
-#line 6353 "grammar.cpp"
+#line 6354 "grammar.cpp"
     break;
 
   case 321: /* group_by_list: group_by_element  */
-#line 2832 "grammar.y"
+#line 2833 "grammar.y"
                     {
 
     }
-#line 6361 "grammar.cpp"
+#line 6362 "grammar.cpp"
     break;
 
   case 322: /* group_by_list: group_by_list "," group_by_element  */
-#line 2836 "grammar.y"
+#line 2837 "grammar.y"
                                           {
 
     }
-#line 6369 "grammar.cpp"
+#line 6370 "grammar.cpp"
     break;
 
   case 323: /* group_by_element: expression  */
-#line 2841 "grammar.y"
+#line 2842 "grammar.y"
               {
       std::string vName = parser->ast()->variables()->nextName();
       auto node = parser->ast()->createNodeAssign(vName.c_str(), vName.size(), (yyvsp[0].node),false);
       parser->updateWillReturnNode(node);
       parser->pushArrayElement(node);
     }
-#line 6380 "grammar.cpp"
+#line 6381 "grammar.cpp"
     break;
 
   case 324: /* having_statements: %empty  */
-#line 2849 "grammar.y"
+#line 2850 "grammar.y"
              {
       (yyval.node)=nullptr;
     }
-#line 6388 "grammar.cpp"
+#line 6389 "grammar.cpp"
     break;
 
   case 325: /* having_statements: "having" expression  */
-#line 2852 "grammar.y"
+#line 2853 "grammar.y"
                         {
       (yyval.node)=(yyvsp[0].node);
     }
-#line 6396 "grammar.cpp"
+#line 6397 "grammar.cpp"
     break;
 
   case 326: /* order_by_statements: %empty  */
-#line 2857 "grammar.y"
+#line 2858 "grammar.y"
                  {
     }
-#line 6403 "grammar.cpp"
+#line 6404 "grammar.cpp"
     break;
 
   case 327: /* $@28: %empty  */
-#line 2859 "grammar.y"
+#line 2860 "grammar.y"
                  {
       auto node = parser->ast()->createNodeArray();
       parser->pushStack(node);
     }
-#line 6412 "grammar.cpp"
+#line 6413 "grammar.cpp"
     break;
 
   case 328: /* order_by_statements: "order" "by" $@28 sort_list  */
-#line 2862 "grammar.y"
+#line 2863 "grammar.y"
                 {
       auto list = static_cast<AstNode*>(parser->popStack());
       parser->processOrderBy(list);
       auto node = parser->ast()->createNodeSort(list);
       parser->ast()->addOperation(node);
     }
-#line 6423 "grammar.cpp"
+#line 6424 "grammar.cpp"
     break;
 
   case 329: /* limit_statements: %empty  */
-#line 2870 "grammar.y"
+#line 2871 "grammar.y"
                    {
     }
-#line 6430 "grammar.cpp"
+#line 6431 "grammar.cpp"
     break;
 
   case 330: /* limit_statements: limit_statement  */
-#line 2872 "grammar.y"
+#line 2873 "grammar.y"
                    {
 
   }
-#line 6438 "grammar.cpp"
+#line 6439 "grammar.cpp"
     break;
 
 
-#line 6442 "grammar.cpp"
+#line 6443 "grammar.cpp"
 
       default: break;
     }

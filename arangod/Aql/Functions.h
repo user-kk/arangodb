@@ -331,6 +331,8 @@ AqlValue Reshape(arangodb::aql::ExpressionContext*, AstNode const&,
                  VPackFunctionParametersView);
 AqlValue Inv(arangodb::aql::ExpressionContext*, AstNode const&,
              VPackFunctionParametersView);
+AqlValue DocumentView(arangodb::aql::ExpressionContext*, AstNode const&,
+                      VPackFunctionParametersView);
 AqlValue Sum(arangodb::aql::ExpressionContext*, AstNode const&,
              VPackFunctionParametersView);
 AqlValue Average(arangodb::aql::ExpressionContext*, AstNode const&,

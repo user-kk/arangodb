@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <memory>
 #include <numeric>
+#include <optional>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -22,6 +23,7 @@
 #include "Basics/Exceptions.h"
 #include <xtensor-blas/xlinalg.hpp>
 #include <xtensor/xmanipulation.hpp>
+#include <xtensor/xstrides.hpp>
 namespace arangodb {
 namespace aql {
 class NdarrayOperator;
@@ -77,6 +79,45 @@ class Ndarray {
   auto shape() {
     return std::visit([](auto& data) { return data.shape(); }, _data);
   }
+  void getElemVpack(size_t index, VPackBuilder& builder) {
+    builder.openObject();
+    TRI_ASSERT(index < size());
+    auto indice = xt::unravel_index(index, shape());
+    size_t n = dimension();
+    if (_axisNames.empty()) {
+      for (size_t i = 0; i < n; i++) {
+        builder.add("_" + std::to_string(i), VPackValue(indice[i]));
+      }
+    } else {
+      TRI_ASSERT(n == _axisNames.size());
+      for (size_t i = 0; i < n; i++) {
+        builder.add(_axisNames[i].has_value() ? _axisNames[i].value()
+                                              : "_" + std::to_string(i),
+                    VPackValue(indice[i]));
+      }
+    }
+    std::variant<int, double> value = flat(index);
+    if (value.index() == 0) {
+      builder.add("_val", VPackValue(std::get<0>(value)));
+    } else {
+      builder.add("_val", VPackValue(std::get<1>(value)));
+    }
+    builder.close();
+  }
+
+  std::variant<int, double> flat(size_t i) {
+    if (_type == INT_TYPE) {
+      return get<int>().flat(i);
+    } else if (_type == FLOAT_TYPE) {
+      return get<float>().flat(i);
+    } else {
+      return get<double>().flat(i);
+    }
+  }
+
+  size_t size() {
+    return std::visit([](auto& data) { return data.size(); }, _data);
+  }
 
   void toVPack(VPackBuilder& builder) {
     // 断言当前一定被初始化了
@@ -109,8 +150,12 @@ class Ndarray {
     builder.add("_type", "ndarray");
     // 轴名称
     builder.add("_axes", VPackValue(velocypack::ValueType::Array));
-    for (auto& i : _axisNames) {
-      builder.add(VPackValue(i));
+    for (size_t i = 0; i < _axisNames.size(); i++) {
+      if (_axisNames[i] == std::nullopt) {
+        builder.add(VPackValue(VPackValueType::Null));
+      } else {
+        builder.add(VPackValue(_axisNames[i].value()));
+      }
     }
     builder.close();
     // shape
@@ -197,7 +242,11 @@ class Ndarray {
     // 轴
     if (slice.hasKey("_axes")) {
       for (auto i : VPackArrayIterator(slice.get("_axes"))) {
-        ret->_axisNames.push_back(i.toString());
+        if (i.isString()) {
+          ret->_axisNames.push_back(i.toString());
+        } else {
+          ret->_axisNames.push_back(std::nullopt);
+        }
       }
     }
     // 类型和形状
@@ -223,27 +272,36 @@ class Ndarray {
   }
 
   template<typename T>
-  static Ndarray* fromVPackArray(VPackSlice arraySlice,
-                                 const std::vector<std::string>& axisNames,
-                                 const std::vector<int>& shape) {
+  static Ndarray* fromVPackArray(
+      VPackSlice arraySlice,
+      const std::vector<std::optional<std::string>>& axisNames,
+      const std::vector<int>& shape) {
     Ndarray* ret = new Ndarray;
     xt::xarray<T> array;
     xt::from_json(nlohmann::json::parse(arraySlice.toJson()), array);
-    if (!axisNames.empty()) {
-      ret->setAxisNames(axisNames);
-    }
     if (!shape.empty()) {
       array.reshape(shape);
     }
     ret->_data = std::move(array);
     ret->setType<T>();
+    if (!axisNames.empty()) {
+      std::vector<std::optional<std::string>> names(ret->dimension(),
+                                                    std::nullopt);
+      for (size_t i = 0; i < axisNames.size(); i++) {
+        if (i >= names.size()) {
+          break;
+        }
+        names[i] = axisNames[i];
+      }
+      ret->setAxisNames(names);
+    }
 
     return ret;
   }
 
-  std::vector<std::string>& getAxisNames() { return _axisNames; }
+  std::vector<std::optional<std::string>>& getAxisNames() { return _axisNames; }
 
-  void setAxisNames(std::vector<std::string> names) {
+  void setAxisNames(std::vector<std::optional<std::string>> names) {
     _axisNames = std::move(names);
   }
 
@@ -276,7 +334,7 @@ class Ndarray {
  private:
   ValueType _type = ERROR;
   DataType _data;
-  std::vector<std::string> _axisNames;
+  std::vector<std::optional<std::string>> _axisNames;
   std::unique_ptr<VPackBuilder> _ndArrayBuilder;
   static constexpr std::array<std::string, 3> valueTypeMap = {"int", "float",
                                                               "double"};

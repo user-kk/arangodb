@@ -35,11 +35,13 @@
 #include "Aql/Stats.h"
 #include "Aql/Variable.h"
 #include "Aql/types.h"
+#include "Aql/Ndarray.hpp"
 #include "Transaction/Methods.h"
 
 #include <memory>
 #include <optional>
 #include <utility>
+#include <variant>
 
 namespace arangodb {
 namespace transaction {
@@ -57,6 +59,7 @@ class QueryContext;
 class RegisterInfos;
 template<BlockPassthrough>
 class SingleRowFetcher;
+enum class ForNdarray;
 
 class EnumerateListExpressionContext final : public QueryExpressionContext {
  public:
@@ -87,7 +90,8 @@ class EnumerateListExecutorInfos {
   EnumerateListExecutorInfos(
       RegisterId inputRegister, RegisterId outputRegister, QueryContext& query,
       Expression* filter, VariableId outputVariableId,
-      std::vector<std::pair<VariableId, RegisterId>>&& varsToRegs);
+      std::vector<std::pair<VariableId, RegisterId>>&& varsToRegs,
+      ForNdarray forNdarray);
 
   EnumerateListExecutorInfos() = delete;
   EnumerateListExecutorInfos(EnumerateListExecutorInfos&&) = default;
@@ -100,6 +104,7 @@ class EnumerateListExecutorInfos {
   VariableId getOutputVariableId() const noexcept;
   bool hasFilter() const noexcept;
   Expression* getFilter() const noexcept;
+  ForNdarray getForNdarray() const noexcept;
   std::vector<std::pair<VariableId, RegisterId>> const& getVarsToRegs()
       const noexcept;
 
@@ -112,6 +117,7 @@ class EnumerateListExecutorInfos {
   RegisterId const _outputRegister;
   VariableId const _outputVariableId;
   Expression* _filter;
+  ForNdarray _forNdarry;
   // Input variable and register pairs required for the filter
   std::vector<std::pair<VariableId, RegisterId>> _varsToRegs;
 };
@@ -184,6 +190,8 @@ class EnumerateListExecutor {
   size_t _inputArrayPosition;
   size_t _inputArrayLength;
   std::unique_ptr<EnumerateListExpressionContext> _expressionContext;
+  // 如果是ndarray,需要将Ndarray的指针存放起来
+  std::variant<Ndarray*, std::unique_ptr<Ndarray>> _ndarray;
 };
 
 }  // namespace aql

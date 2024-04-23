@@ -29,7 +29,9 @@
 #include "Aql/AqlCall.h"
 #include "Aql/AqlItemBlockInputRange.h"
 #include "Aql/AqlValue.h"
+#include "Aql/ExecutionNode.h"
 #include "Aql/Expression.h"
+#include "Aql/Ndarray.hpp"
 #include "Aql/OutputAqlItemRow.h"
 #include "Aql/QueryContext.h"
 #include "Aql/RegisterInfos.h"
@@ -38,6 +40,8 @@
 #include "Basics/Exceptions.h"
 
 #include <absl/strings/str_cat.h>
+#include <velocypack/Builder.h>
+#include <variant>
 
 using namespace arangodb;
 using namespace arangodb::aql;
@@ -107,12 +111,14 @@ void EnumerateListExpressionContext::adjustCurrentRow(
 EnumerateListExecutorInfos::EnumerateListExecutorInfos(
     RegisterId inputRegister, RegisterId outputRegister, QueryContext& query,
     Expression* filter, VariableId outputVariableId,
-    std::vector<std::pair<VariableId, RegisterId>>&& varsToRegs)
+    std::vector<std::pair<VariableId, RegisterId>>&& varsToRegs,
+    ForNdarray forNdarray)
     : _query(query),
       _inputRegister(inputRegister),
       _outputRegister(outputRegister),
       _outputVariableId(outputVariableId),
       _filter(filter),
+      _forNdarry(forNdarray),
       _varsToRegs(std::move(varsToRegs)) {
   TRI_ASSERT(!hasFilter() ||
              _outputVariableId != std::numeric_limits<VariableId>::max());
@@ -147,6 +153,10 @@ EnumerateListExecutorInfos::getVarsToRegs() const noexcept {
   return _varsToRegs;
 }
 
+ForNdarray EnumerateListExecutorInfos::getForNdarray() const noexcept {
+  return _forNdarry;
+}
+
 EnumerateListExecutor::EnumerateListExecutor(Fetcher& fetcher,
                                              EnumerateListExecutorInfos& infos)
     : _infos(infos),
@@ -176,12 +186,21 @@ void EnumerateListExecutor::initializeNewRow(
 
   // store the length into a local variable
   // so we don't need to calculate length every time
-  if (!inputList.isArray()) {
+  if (!inputList.isArray() && !inputList.canTurnIntoNdarray()) {
     throwArrayExpectedException(inputList);
   }
-  _inputArrayLength = inputList.length();
-
-  _inputArrayPosition = 0;
+  if (inputList.canTurnIntoNdarray()) {  // Ndarray
+    _ndarray = inputList.getTurnIntoNdarray();
+    if (_ndarray.index() == 0) {
+      _inputArrayLength = std::get<0>(_ndarray)->size();
+    } else {
+      _inputArrayLength = std::get<1>(_ndarray)->size();
+    }
+    _inputArrayPosition = 0;
+  } else {  // array
+    _inputArrayLength = inputList.length();
+    _inputArrayPosition = 0;
+  }
 }
 
 bool EnumerateListExecutor::processArrayElement(OutputAqlItemRow& output) {
@@ -335,6 +354,34 @@ AqlValue EnumerateListExecutor::getAqlValue(AqlValue const& inVarReg,
                                             bool& mustDestroy) {
   TRI_IF_FAILURE("EnumerateListBlock::getAqlValue") {
     THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
+  }
+  if (inVarReg.canTurnIntoNdarray()) {
+    switch (_infos.getForNdarray()) {
+      case ForNdarray::DEFAULT: {
+        std::variant<int, double> value;
+        if (_ndarray.index() == 0) {
+          value = std::get<0>(_ndarray)->flat(pos);
+        } else {
+          value = std::get<1>(_ndarray)->flat(pos);
+        }
+        mustDestroy = false;
+        if (value.index() == 0) {
+          return AqlValue(AqlValueHintInt(std::get<0>(value)));
+        } else {
+          return AqlValue(AqlValueHintDouble(std::get<1>(value)));
+        }
+      }
+      case ForNdarray::ALL: {
+        VPackBuilder builder;
+        if (_ndarray.index() == 0) {
+          std::get<0>(_ndarray)->getElemVpack(pos, builder);
+        } else {
+          std::get<1>(_ndarray)->getElemVpack(pos, builder);
+        }
+        mustDestroy = true;
+        return AqlValue(builder.slice());
+      }
+    }
   }
 
   return inVarReg.at(pos, mustDestroy, true);

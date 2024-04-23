@@ -2320,6 +2320,7 @@ ExecutionNode* ExecutionPlan::fromNode(AstNode const* node) {
 
   size_t const n = node->numMembers();
 
+  // 把en当参数传入,每个函数负责向en的depend中填入新的节点,并将这个节点返回
   for (size_t i = 0; i < n; ++i) {
     auto member = node->getMemberUnchecked(i);
 

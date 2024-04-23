@@ -280,6 +280,8 @@ size_t AqlValue::length() const {
   switch (t) {
     case RANGE:
       return range()->size();
+    case NDARRAY:
+      return _data.ndArrayMeta.pointer->size();
     default:
       return slice(t).length();
   }

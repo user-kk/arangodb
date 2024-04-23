@@ -747,6 +747,8 @@ class EnumerateCollectionNode : public ExecutionNode,
   IndexHint _hint;
 };
 
+enum class ForNdarray { DEFAULT, ALL };
+
 /// @brief class EnumerateListNode
 class EnumerateListNode : public ExecutionNode {
   friend class ExecutionNode;
@@ -754,7 +756,8 @@ class EnumerateListNode : public ExecutionNode {
 
  public:
   EnumerateListNode(ExecutionPlan* plan, ExecutionNodeId id,
-                    Variable const* inVariable, Variable const* outVariable);
+                    Variable const* inVariable, Variable const* outVariable,
+                    AstNode* option = nullptr);
 
   EnumerateListNode(ExecutionPlan*, arangodb::velocypack::Slice base);
 
@@ -822,6 +825,8 @@ class EnumerateListNode : public ExecutionNode {
 
   /// @brief early filtering condition
   std::unique_ptr<Expression> _filter;
+
+  ForNdarray _forNdarray = ForNdarray::ALL;
 };
 
 /// @brief class LimitNode

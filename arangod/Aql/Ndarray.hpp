@@ -24,9 +24,11 @@
 #include <xtensor-blas/xlinalg.hpp>
 #include <xtensor/xmanipulation.hpp>
 #include <xtensor/xstrides.hpp>
+#include <xtensor/xindex_view.hpp>
 namespace arangodb {
 namespace aql {
 class NdarrayOperator;
+class NdarrayOperatorDisableSIMD;
 
 template<typename T>
 struct is_xarray : std::false_type {};
@@ -37,6 +39,7 @@ struct is_xarray<xt::xarray<T>> : std::true_type {};
 class Ndarray {
  public:
   friend NdarrayOperator;
+  friend NdarrayOperatorDisableSIMD;
   enum ValueType { INT_TYPE = 0, FLOAT_TYPE = 1, DOUBLE_TYPE = 2, ERROR = 3 };
   using AxisNameType = std::vector<std::optional<std::string>>;
 
@@ -232,6 +235,25 @@ class Ndarray {
     }
     return _ndArrayBuilder->slice();
   }
+
+  Ndarray* filter(Ndarray* v) {
+    TRI_ASSERT(v->_type == INT_TYPE);
+    TRI_ASSERT(_type != ERROR);
+    Ndarray* ret = new Ndarray;
+    if (_type == INT_TYPE) {
+      ret->_data.emplace<xt::xarray<int>>(
+          xt::filter(get<int>(), v->get<int>()));
+    } else if (_type == DOUBLE_TYPE) {
+      ret->_data.emplace<xt::xarray<double>>(
+          xt::filter(get<double>(), v->get<int>()));
+    } else {
+      ret->_data.emplace<xt::xarray<float>>(
+          xt::filter(get<float>(), v->get<int>()));
+    }
+    ret->_type = _type;
+    return ret;
+  }
+  ValueType getValueType() const { return _type; }
 
   static bool checkIsNdarray(VPackSlice slice) {
     if (!slice.isObject()) {

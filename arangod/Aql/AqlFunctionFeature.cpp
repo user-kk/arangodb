@@ -646,7 +646,12 @@ void AqlFunctionFeature::addNdArrayFunctions() {
   add({"RESHAPE", ".,.", Function::makeFlags(), &functions::Reshape});
   add({"DOCUMENT_VIEW", ".", Function::makeFlags(), &functions::DocumentView});
   add({"SHAPE", ".|+", Function::makeFlags(), &functions::Shape});
+  add({"NDARRAY_SUM", ".|+", Function::makeFlags(), &functions::NdarraySum});
+  add({"NDARRAY_COUNT_NON_ZERO", ".|+", Function::makeFlags(),
+       &functions::NdarrayCountNonZero});
   add({"DIMENSION", ".", Function::makeFlags(), &functions::Dimension});
+  add({"NDARRAY_WHERE", ".,.,.", Function::makeFlags(),
+       &functions::NdarrayWhere});
 };
 }  // namespace aql
 }  // namespace arangodb

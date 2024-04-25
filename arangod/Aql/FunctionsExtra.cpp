@@ -649,7 +649,7 @@ AqlValue functions::MatTranspose(ExpressionContext* expressionContext,
                                  AstNode const&,
                                  VPackFunctionParametersView parameters) {
   AqlValue value = extractFunctionParameterValue(parameters, 0);
-  AqlValue permutationValue = extractFunctionParameterValue(parameters, 1);
+  AqlValue axisValue = extractFunctionParameterValue(parameters, 1);
   if (value.canTurnIntoNdarray()) {
     value.turnIntoNdarray();
   }
@@ -659,16 +659,16 @@ AqlValue functions::MatTranspose(ExpressionContext* expressionContext,
                     TRI_ERROR_QUERY_ARRAY_EXPECTED);
     return AqlValue(AqlValueHintNull());
   }
-  if (!permutationValue.isNone() && !permutationValue.isArray()) {
+  if (!axisValue.isNone() && !axisValue.isArray()) {
     registerWarning(expressionContext, "MatTranspose",
                     TRI_ERROR_QUERY_ARRAY_EXPECTED);
     return AqlValue(AqlValueHintNull());
   }
 
   std::vector<int> permutation;
-  if (!permutationValue.isNone()) {
-    permutation.reserve(permutationValue.length());
-    for (auto i : VPackArrayIterator(permutationValue.slice())) {
+  if (!axisValue.isNone()) {
+    permutation.reserve(axisValue.length());
+    for (auto i : VPackArrayIterator(axisValue.slice())) {
       permutation.push_back(i.getInt());
     }
   }
@@ -779,4 +779,85 @@ AqlValue functions::DocumentView(
   registerWarning(expressionContext, "DocumentView",
                   TRI_ERROR_QUERY_ARRAY_EXPECTED);
   return AqlValue(AqlValueHintNull());
+}
+
+AqlValue functions::NdarraySum(
+    arangodb::aql::ExpressionContext* expressionContext, AstNode const&,
+    VPackFunctionParametersView parameters) {
+  AqlValue value = extractFunctionParameterValue(parameters, 0);
+  AqlValue axisValue = extractFunctionParameterValue(parameters, 1);
+
+  if (value.canTurnIntoNdarray()) {
+    value.turnIntoNdarray();
+  }
+  if (!value.isNdArray()) {
+    // not a Ndarray
+    registerWarning(expressionContext, "NdarraySum",
+                    TRI_ERROR_QUERY_ARRAY_EXPECTED);
+    return AqlValue(AqlValueHintNull());
+  }
+
+  if (!axisValue.isNone() && !axisValue.isArray() && !axisValue.isInt()) {
+    registerWarning(expressionContext, "NdarraySum",
+                    TRI_ERROR_QUERY_ARRAY_EXPECTED);
+    return AqlValue(AqlValueHintNull());
+  }
+  if (axisValue.isInt() && axisValue.toInt64() < 0) {
+    registerWarning(expressionContext, "NdarraySum",
+                    TRI_ERROR_QUERY_ARRAY_EXPECTED);
+    return AqlValue(AqlValueHintNull());
+  }
+
+  std::vector<size_t> axis;
+  if (axisValue.isArray()) {
+    axis.reserve(axisValue.length());
+    for (auto i : VPackArrayIterator(axisValue.slice())) {
+      axis.push_back(i.getInt());
+    }
+  } else if (axisValue.isInt()) {
+    axis.push_back(axisValue.toInt64());
+  }
+  return AqlValue(Ndop::aggCompute(value.getNdArray(),
+                                   arangodb::aql::NdarrayOperator::SUM, axis));
+}
+
+AqlValue functions::NdarrayCountNonZero(
+    arangodb::aql::ExpressionContext* expressionContext, AstNode const&,
+    VPackFunctionParametersView parameters) {
+  AqlValue value = extractFunctionParameterValue(parameters, 0);
+  AqlValue axisValue = extractFunctionParameterValue(parameters, 1);
+
+  if (value.canTurnIntoNdarray()) {
+    value.turnIntoNdarray();
+  }
+  if (!value.isNdArray()) {
+    // not a Ndarray
+    registerWarning(expressionContext, "NdarraySum",
+                    TRI_ERROR_QUERY_ARRAY_EXPECTED);
+    return AqlValue(AqlValueHintNull());
+  }
+
+  if (!axisValue.isNone() && !axisValue.isArray() && !axisValue.isInt()) {
+    registerWarning(expressionContext, "NdarraySum",
+                    TRI_ERROR_QUERY_ARRAY_EXPECTED);
+    return AqlValue(AqlValueHintNull());
+  }
+  if (axisValue.isInt() && axisValue.toInt64() < 0) {
+    registerWarning(expressionContext, "NdarraySum",
+                    TRI_ERROR_QUERY_ARRAY_EXPECTED);
+    return AqlValue(AqlValueHintNull());
+  }
+
+  std::vector<size_t> axis;
+  if (axisValue.isArray()) {
+    axis.reserve(axisValue.length());
+    for (auto i : VPackArrayIterator(axisValue.slice())) {
+      axis.push_back(i.getInt());
+    }
+  } else if (axisValue.isInt()) {
+    axis.push_back(axisValue.toInt64());
+  }
+  return AqlValue(
+      Ndop::aggCompute(value.getNdArray(),
+                       arangodb::aql::NdarrayOperator::COUNT_NON_ZERO, axis));
 }

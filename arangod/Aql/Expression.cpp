@@ -814,6 +814,12 @@ AqlValue Expression::executeSimpleExpressionIndexedAccess(
         ctx.registerError(TRI_ERROR_QUERY_PARSE, "name index format error");
         return AqlValue(AqlValueHintNull());
       }
+    } else if (indexResult.isNdArray()) {
+      if (result.getNdArray()->shape() != indexResult.getNdArray()->shape()) {
+        ctx.registerError(TRI_ERROR_QUERY_PARSE, "shape is different");
+        return AqlValue(AqlValueHintNull());
+      }
+      return AqlValue(result.getNdArray()->filter(indexResult.getNdArray()));
     } else {
       ctx.registerError(TRI_ERROR_QUERY_PARSE, "range index format error");
       return AqlValue(AqlValueHintNull());
@@ -1361,6 +1367,10 @@ AqlValue Expression::executeSimpleExpressionNot(ExpressionContext& ctx,
       executeSimpleExpression(ctx, node->getMember(0), mustDestroy, false);
 
   AqlValueGuard guard(operand, mustDestroy);
+  if (operand.canTurnIntoNdarray()) {
+    operand.turnIntoNdarray();
+    return AqlValue(Ndop::getNot(operand.getNdArray()));
+  }
   bool const operandIsTrue = operand.toBoolean();
 
   mustDestroy = false;  // only a boolean
@@ -1376,6 +1386,20 @@ AqlValue Expression::executeSimpleExpressionPlus(ExpressionContext& ctx,
       executeSimpleExpression(ctx, node->getMember(0), mustDestroy, false);
 
   AqlValueGuard guard(operand, mustDestroy);
+
+  if (operand.canTurnIntoNdarray()) {
+    operand.turnIntoNdarray();
+    if (operand.getNdArray()->getValueType() == Ndarray::INT_TYPE) {
+      return AqlValue(
+          Ndarray::fromOtherNdarray<int>(operand.getNdArray(), {}, {}));
+    } else if (operand.getNdArray()->getValueType() == Ndarray::DOUBLE_TYPE) {
+      return AqlValue(
+          Ndarray::fromOtherNdarray<double>(operand.getNdArray(), {}, {}));
+    } else {
+      return AqlValue(
+          Ndarray::fromOtherNdarray<float>(operand.getNdArray(), {}, {}));
+    }
+  }
 
   if (operand.isNumber()) {
     VPackSlice const s = operand.slice();
@@ -1410,6 +1434,10 @@ AqlValue Expression::executeSimpleExpressionMinus(ExpressionContext& ctx,
       executeSimpleExpression(ctx, node->getMember(0), mustDestroy, false);
 
   AqlValueGuard guard(operand, mustDestroy);
+  if (operand.canTurnIntoNdarray()) {
+    operand.turnIntoNdarray();
+    return AqlValue(Ndop::getNegative(operand.getNdArray()));
+  }
 
   if (operand.isNumber()) {
     VPackSlice const s = operand.slice();
@@ -1450,6 +1478,21 @@ AqlValue Expression::executeSimpleExpressionAnd(ExpressionContext& ctx,
   AqlValue left = executeSimpleExpression(ctx, node->getMemberUnchecked(0),
                                           mustDestroy, true);
 
+  if (left.canTurnIntoNdarray()) {  // and 和 or 只允许Ndarray之间,不允许标量
+    left.turnIntoNdarray();
+    AqlValue right = executeSimpleExpression(ctx, node->getMemberUnchecked(1),
+                                             mustDestroy, true);
+    AqlValueGuard guardRight(right, mustDestroy);
+    if (right.canTurnIntoNdarray()) {
+      right.turnIntoNdarray();
+      return AqlValue(Ndop::CompareCompute(*left.getNdArray(),
+                                           *right.getNdArray(), Ndop::AND));
+    } else {
+      THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
+                                     "This type is not allowed");
+    }
+  }
+
   if (left.toBoolean()) {
     // left is true => return right
     if (mustDestroy) {
@@ -1469,6 +1512,21 @@ AqlValue Expression::executeSimpleExpressionOr(ExpressionContext& ctx,
                                                bool& mustDestroy) {
   AqlValue left = executeSimpleExpression(ctx, node->getMemberUnchecked(0),
                                           mustDestroy, true);
+
+  if (left.canTurnIntoNdarray()) {  // and 和 or 只允许Ndarray之间,不允许标量
+    left.turnIntoNdarray();
+    AqlValue right = executeSimpleExpression(ctx, node->getMemberUnchecked(1),
+                                             mustDestroy, true);
+    AqlValueGuard guardRight(right, mustDestroy);
+    if (right.canTurnIntoNdarray()) {
+      right.turnIntoNdarray();
+      return AqlValue(Ndop::CompareCompute(*left.getNdArray(),
+                                           *right.getNdArray(), Ndop::OR));
+    } else {
+      THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
+                                     "This type is not allowed");
+    }
+  }
 
   if (left.toBoolean()) {
     // left is true => return left
@@ -1573,6 +1631,68 @@ AqlValue Expression::executeSimpleExpressionComparison(ExpressionContext& ctx,
   }
 
   // all other comparison operators...
+
+  if (left.canTurnIntoNdarray()) {
+    left.turnIntoNdarray();
+  }
+  if (right.canTurnIntoNdarray()) {
+    right.turnIntoNdarray();
+  }
+
+  // 如果是Ndarray时,要使用这个CompareOperator
+  Ndop::CompareOperator op;
+  switch (node->type) {
+    case NODE_TYPE_OPERATOR_BINARY_EQ:
+      op = Ndop::EQ;
+      break;
+    case NODE_TYPE_OPERATOR_BINARY_NE:
+      op = Ndop::NE;
+      break;
+    case NODE_TYPE_OPERATOR_BINARY_LT:
+      op = Ndop::LT;
+      break;
+    case NODE_TYPE_OPERATOR_BINARY_LE:
+      op = Ndop::LE;
+      break;
+    case NODE_TYPE_OPERATOR_BINARY_GT:
+      op = Ndop::GT;
+      break;
+    case NODE_TYPE_OPERATOR_BINARY_GE:
+      op = Ndop::GE;
+      break;
+    default:
+      std::string msg("unhandled type '");
+      msg.append(node->getTypeString());
+      msg.append("' in executeSimpleExpression()");
+      THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_INTERNAL, msg);
+  }
+
+  if (left.isNdArray() && right.isNdArray()) {
+    return AqlValue(
+        Ndop::CompareCompute(*left.getNdArray(), *right.getNdArray(), op));
+  } else if (left.isNdArray()) {
+    if (right.isInt()) {
+      return AqlValue(Ndop::CompareCompute(
+          *left.getNdArray(), static_cast<int>(right.toInt64()), op));
+    } else if (right.isfloatOrDouble()) {
+      return AqlValue(
+          Ndop::CompareCompute(*left.getNdArray(), right.toDouble(), op));
+    } else {
+      THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
+                                     "This type is not allowed");
+    }
+  } else if (right.isNdArray()) {
+    if (left.isInt()) {
+      return AqlValue(Ndop::CompareCompute(static_cast<int>(left.toInt64()),
+                                           *right.getNdArray(), op));
+    } else if (left.isfloatOrDouble()) {
+      return AqlValue(
+          Ndop::CompareCompute(left.toDouble(), *right.getNdArray(), op));
+    } else {
+      THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
+                                     "This type is not allowed");
+    }
+  }
 
   // for equality and non-equality we can use a binary comparison
   bool compareUtf8 = (node->type != NODE_TYPE_OPERATOR_BINARY_EQ &&

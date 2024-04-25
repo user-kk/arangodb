@@ -71,6 +71,7 @@ add_library(arango_aql STATIC
   Function.cpp
   Functions.cpp
   FunctionsExtra.cpp
+  FunctionsExtra2.cpp
   GraphNode.cpp
   GraphOptimizerRules.cpp
   HashedCollectExecutor.cpp

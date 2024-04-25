@@ -474,6 +474,7 @@ AstNode* transformOutputVariables(Parser* parser, AstNode const* names) {
 %token T_BY "by"
 %token T_HAVING "having"
 %token T_UNNEST "unnest"
+%token T_UNNEST_ALL "unnest_all"
 %token T_DOLLAR "$"
 %token T_JOIN "join"
 %token T_ON "on"
@@ -585,6 +586,7 @@ AstNode* transformOutputVariables(Parser* parser, AstNode const* names) {
 %type <boolval> distinct_label;
 %type <node> expression_or_none;
 %type <node> interval_element;
+%type <node> range_index;
 
 
 /* define start token of language */
@@ -2391,10 +2393,21 @@ ndarray_expression :
     expression {
       parser->pushArrayElement($1);
     }
-  | expression_or_none T_COLON expression_or_none interval_element{
-      parser->pushArrayElement(parser->ast()->createNodeRangeIndexed($1,$3,$4));
+  | range_index {
+      parser->pushArrayElement($1);
+    }
+  | variable_name T_OBJECT_OPEN expression T_OBJECT_CLOSE{
+      parser->pushArrayElement(parser->ast()->createNodeNameIndex(std::string_view{$1.value, $1.length},$3));
+    }
+  | variable_name T_OBJECT_OPEN range_index T_OBJECT_CLOSE{
+      parser->pushArrayElement(parser->ast()->createNodeNameIndex(std::string_view{$1.value, $1.length},$3));
     }
   ;
+range_index:
+  expression_or_none T_COLON expression_or_none interval_element{
+    $$=parser->ast()->createNodeRangeIndexed($1,$3,$4);
+  }
+;
 
 expression_or_none:
     /*empty*/ {
@@ -2683,6 +2696,12 @@ unnest_statement:
   |  T_UNNEST expression_list{
 
     }
+  | T_UNNEST_ALL {       
+      auto node = parser->ast()->createNodeArray();
+      parser->pushArray(node); 
+    } optional_axis_name_list {
+      parser->ast()->injectOptionForNodeFor(parser->popArray());
+    }
   ;
 expression_list:
     expression_element {
@@ -2706,6 +2725,37 @@ expression_element:
       //向整个ast的_root添加member
       parser->ast()->addOperation(node);
   }
+  ;
+
+optional_axis_name_list :
+    /*empty*/{
+
+    }
+  | T_AS axis_name{
+
+  }
+  | T_AS axis_name T_OPEN axis_name_list T_CLOSE {
+      
+   }
+  ;
+
+axis_name_list:
+    axis_name {
+
+    }
+  | axis_name_list T_COMMA axis_name {
+
+    }
+  ;
+axis_name :
+    T_NULL {
+      auto node = parser->ast()->createNodeNop();
+      parser->pushArrayElement(node);
+    }
+  | variable_name {
+      auto node = parser->ast()->createNodeValueString($1.value, $1.length);
+      parser->pushArrayElement(node);
+    }
   ;
 
 distinct_label:

@@ -438,12 +438,23 @@ AqlValue functions::ToNdArrayf(
   AqlValue value = extractFunctionParameterValue(parameters, 0);
   AqlValue nameValue = extractFunctionParameterValue(parameters, 1);
   AqlValue shapeValue = extractFunctionParameterValue(parameters, 2);
-  if (!value.isArray()) {
-    // not an array
+  if (!value.isArray() && !value.canTurnIntoNdarray()) {
+    // not an array or a Ndarray
     registerWarning(expressionContext, "ToNdArrayf",
                     TRI_ERROR_QUERY_ARRAY_EXPECTED);
     return AqlValue(AqlValueHintNull());
   }
+
+  transaction::Methods* trx = &expressionContext->trx();
+  auto* vopts = &trx->vpackOptions();
+
+  AqlValueMaterializer materializer(vopts);
+  VPackSlice slice;
+
+  if (value.isRange()) {
+    slice = materializer.slice(value);
+  }
+
   if (!nameValue.isNone() && !nameValue.isArray()) {
     registerWarning(expressionContext, "ToNdArrayf",
                     TRI_ERROR_QUERY_ARRAY_EXPECTED);
@@ -473,8 +484,16 @@ AqlValue functions::ToNdArrayf(
       shape.push_back(i.getInt());
     }
   }
-
-  return AqlValue(Ndarray::fromVPackArray<float>(value.slice(), names, shape));
+  if (value.isArray()) {
+    return AqlValue(Ndarray::fromVPackArray<float>(
+        value.isRange() ? slice : value.slice(), names, shape));
+  } else if (value.isVackNdarray()) {
+    return AqlValue(
+        Ndarray::fromOtherVPack<float>(value.slice(), names, shape));
+  } else {  // Ndarray
+    return AqlValue(
+        Ndarray::fromOtherNdarray<float>(value.getNdArray(), names, shape));
+  }
 }
 
 AqlValue functions::ToNdArrayd(
@@ -483,12 +502,23 @@ AqlValue functions::ToNdArrayd(
   AqlValue value = extractFunctionParameterValue(parameters, 0);
   AqlValue nameValue = extractFunctionParameterValue(parameters, 1);
   AqlValue shapeValue = extractFunctionParameterValue(parameters, 2);
-  if (!value.isArray()) {
+  if (!value.isArray() && !value.canTurnIntoNdarray()) {
     // not an array
     registerWarning(expressionContext, "ToNdArrayd",
                     TRI_ERROR_QUERY_ARRAY_EXPECTED);
     return AqlValue(AqlValueHintNull());
   }
+
+  transaction::Methods* trx = &expressionContext->trx();
+  auto* vopts = &trx->vpackOptions();
+
+  AqlValueMaterializer materializer(vopts);
+  VPackSlice slice;
+
+  if (value.isRange()) {
+    slice = materializer.slice(value);
+  }
+
   if (!nameValue.isNone() && !nameValue.isArray()) {
     registerWarning(expressionContext, "ToNdArrayd",
                     TRI_ERROR_QUERY_ARRAY_EXPECTED);
@@ -519,7 +549,16 @@ AqlValue functions::ToNdArrayd(
     }
   }
 
-  return AqlValue(Ndarray::fromVPackArray<double>(value.slice(), names, shape));
+  if (value.isArray()) {
+    return AqlValue(Ndarray::fromVPackArray<double>(
+        value.isRange() ? slice : value.slice(), names, shape));
+  } else if (value.isVackNdarray()) {
+    return AqlValue(
+        Ndarray::fromOtherVPack<double>(value.slice(), names, shape));
+  } else {  // Ndarray
+    return AqlValue(
+        Ndarray::fromOtherNdarray<double>(value.getNdArray(), names, shape));
+  }
 }
 
 AqlValue functions::ToNdArrayi(
@@ -528,12 +567,23 @@ AqlValue functions::ToNdArrayi(
   AqlValue value = extractFunctionParameterValue(parameters, 0);
   AqlValue nameValue = extractFunctionParameterValue(parameters, 1);
   AqlValue shapeValue = extractFunctionParameterValue(parameters, 2);
-  if (!value.isArray()) {
+  if (!value.isArray() && !value.canTurnIntoNdarray()) {
     // not an array
     registerWarning(expressionContext, "ToNdArrayi",
                     TRI_ERROR_QUERY_ARRAY_EXPECTED);
     return AqlValue(AqlValueHintNull());
   }
+
+  transaction::Methods* trx = &expressionContext->trx();
+  auto* vopts = &trx->vpackOptions();
+
+  AqlValueMaterializer materializer(vopts);
+  VPackSlice slice;
+
+  if (value.isRange()) {
+    slice = materializer.slice(value);
+  }
+
   if (!nameValue.isNone() && !nameValue.isArray()) {
     registerWarning(expressionContext, "ToNdArrayi",
                     TRI_ERROR_QUERY_ARRAY_EXPECTED);
@@ -564,7 +614,15 @@ AqlValue functions::ToNdArrayi(
     }
   }
 
-  return AqlValue(Ndarray::fromVPackArray<int>(value.slice(), names, shape));
+  if (value.isArray()) {
+    return AqlValue(Ndarray::fromVPackArray<int>(
+        value.isRange() ? slice : value.slice(), names, shape));
+  } else if (value.isVackNdarray()) {
+    return AqlValue(Ndarray::fromOtherVPack<int>(value.slice(), names, shape));
+  } else {  // Ndarray
+    return AqlValue(
+        Ndarray::fromOtherNdarray<int>(value.getNdArray(), names, shape));
+  }
 }
 
 AqlValue functions::MatMul(ExpressionContext* expressionContext, AstNode const&,
@@ -646,6 +704,38 @@ AqlValue functions::Reshape(ExpressionContext* expressionContext,
   return AqlValue(Ndop::reshape(value.getNdArray(), shape));
 }
 
+AqlValue functions::Shape(ExpressionContext* expressionContext, AstNode const&,
+                          VPackFunctionParametersView parameters) {
+  AqlValue value = extractFunctionParameterValue(parameters, 0);
+  AqlValue shapeValue = extractFunctionParameterValue(parameters, 1);
+  if (!value.canTurnIntoNdarray()) {
+    // not a Ndarray
+    registerWarning(expressionContext, "Reshape",
+                    TRI_ERROR_QUERY_ARRAY_EXPECTED);
+    return AqlValue(AqlValueHintNull());
+  }
+  transaction::Methods* trx = &expressionContext->trx();
+  transaction::BuilderLeaser builder(trx);
+  if (shapeValue.isNone()) {
+    value.getNdArrayShape(*builder.get());
+    return AqlValue(builder->slice(), builder->size());
+  }
+  if (shapeValue.isInt()) {
+    if (shapeValue.toInt64() < 0) {
+      THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE, "out of range");
+    }
+    value.getNdArrayShape(*builder.get(), shapeValue.toInt64());
+    return AqlValue(builder->slice(), builder->size());
+  }
+  if (shapeValue.isString()) {
+    value.getNdArrayShape(*builder.get(), shapeValue.slice().toString());
+    return AqlValue(builder->slice(), builder->size());
+  }
+
+  registerWarning(expressionContext, "Shape", TRI_ERROR_TYPE_ERROR);
+  return AqlValue(AqlValueHintNull());
+}
+
 AqlValue functions::Inv(ExpressionContext* expressionContext, AstNode const&,
                         VPackFunctionParametersView parameters) {
   AqlValue value = extractFunctionParameterValue(parameters, 0);
@@ -659,6 +749,20 @@ AqlValue functions::Inv(ExpressionContext* expressionContext, AstNode const&,
     return AqlValue(AqlValueHintNull());
   }
   return AqlValue(Ndop::inv(value.getNdArray()));
+}
+
+AqlValue functions::Dimension(ExpressionContext* expressionContext,
+                              AstNode const&,
+                              VPackFunctionParametersView parameters) {
+  AqlValue value = extractFunctionParameterValue(parameters, 0);
+  if (value.canTurnIntoNdarray()) {
+    return AqlValue(AqlValueHintUInt(value.getNdArrayDimension()));
+  }
+
+  // not a Ndarray
+  registerWarning(expressionContext, "Dimension",
+                  TRI_ERROR_QUERY_ARRAY_EXPECTED);
+  return AqlValue(AqlValueHintNull());
 }
 
 AqlValue functions::DocumentView(

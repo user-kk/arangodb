@@ -407,6 +407,8 @@ class Ast {
   /// @brief create an AST object element node
   AstNode* createNodeObjectElement(std::string_view name, AstNode const*);
 
+  AstNode* createNodeNameIndex(std::string_view name, AstNode const* number);
+
   /// @brief create an AST calculated object element node
   AstNode* createNodeCalculatedObjectElement(AstNode const*, AstNode const*);
 
@@ -557,6 +559,9 @@ class Ast {
   AstNode* optimizeUnaryOperatorArithmetic(AstNode*);
 
   AstNode const* getSubqueryForVariable(Variable const* variable) const;
+
+  ///@brief 向root中的最后一个for节点注入选项节点,用于Ndarray的遍历
+  void injectOptionForNodeFor(AstNode* node);
 
  private:
   /// @brief make condition from example

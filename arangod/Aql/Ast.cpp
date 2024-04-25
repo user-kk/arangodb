@@ -1582,6 +1582,15 @@ AstNode* Ast::createNodeObjectElement(std::string_view attributeName,
   return node;
 }
 
+AstNode* Ast::createNodeNameIndex(std::string_view name,
+                                  AstNode const* number) {
+  AstNode* node = createNode(NODE_TYPE_NAME_INDEX);
+  node->setStringValue(name.data(), name.size());
+  node->addMember(number);
+
+  return node;
+}
+
 /// @brief create an AST calculated object element node
 AstNode* Ast::createNodeCalculatedObjectElement(AstNode const* attributeName,
                                                 AstNode const* expression) {
@@ -4502,6 +4511,11 @@ arangodb::aql::AstNode* arangodb::aql::Ast::createNodeLet(
   AstNode* variable = createNodeVariable(variableName, isUserDefinedVariable);
   node->addMember(variable);
   node->addMember(expression);
-
   return node;
 };
+
+void Ast::injectOptionForNodeFor(AstNode* node) {
+  AstNode* forNode = _root->getMember(_root->numMembers() - 1);
+  TRI_ASSERT(forNode->type == NODE_TYPE_FOR);
+  forNode->members[2] = node;
+}

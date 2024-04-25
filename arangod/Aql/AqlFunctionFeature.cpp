@@ -645,6 +645,8 @@ void AqlFunctionFeature::addNdArrayFunctions() {
   add({"MAT_INV", ".", Function::makeFlags(), &functions::Inv});
   add({"RESHAPE", ".,.", Function::makeFlags(), &functions::Reshape});
   add({"DOCUMENT_VIEW", ".", Function::makeFlags(), &functions::DocumentView});
+  add({"SHAPE", ".|+", Function::makeFlags(), &functions::Shape});
+  add({"DIMENSION", ".", Function::makeFlags(), &functions::Dimension});
 };
 }  // namespace aql
 }  // namespace arangodb

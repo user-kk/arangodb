@@ -651,6 +651,7 @@ AstNode::AstNode(Ast* ast, arangodb::velocypack::Slice slice)
     case NODE_TYPE_FOR_VIEW:
     case NODE_TYPE_WINDOW:
     case NODE_TYPE_ARRAY_FILTER:
+    case NODE_TYPE_NAME_INDEX:
     case NODE_TYPE_RANGE_INDEX:  // TODO :这个种类可能会有问题
       break;
   }
@@ -711,7 +712,7 @@ std::string AstNode::getString() const {
       type == NODE_TYPE_ATTRIBUTE_ACCESS || type == NODE_TYPE_PARAMETER ||
       type == NODE_TYPE_PARAMETER_DATASOURCE || type == NODE_TYPE_COLLECTION ||
       type == NODE_TYPE_VIEW || type == NODE_TYPE_BOUND_ATTRIBUTE_ACCESS ||
-      type == NODE_TYPE_FCALL_USER);
+      type == NODE_TYPE_FCALL_USER || type == NODE_TYPE_NAME_INDEX);
   TRI_ASSERT(value.type == VALUE_TYPE_STRING);
   return std::string(getStringValue(), getStringLength());
 }

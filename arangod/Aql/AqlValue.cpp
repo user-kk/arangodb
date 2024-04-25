@@ -22,7 +22,11 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "AqlValue.h"
+#include <velocypack/Iterator.h>
+#include <velocypack/Value.h>
 #include <memory>
+#include <optional>
+#include <string_view>
 
 #include "Aql/Arithmetic.h"
 #include "Aql/Ndarray.hpp"
@@ -1398,6 +1402,78 @@ void const* AqlValue::data() const noexcept {
       return nullptr;
   }
 }
+
+void AqlValue::getNdArrayShape(VPackBuilder& builder) const noexcept {
+  TRI_ASSERT(canTurnIntoNdarray());
+  if (isVackNdarray()) {
+    builder.add(slice()["_shape"]);
+  } else {
+    auto shape = _data.ndArrayMeta.pointer->shape();
+    builder.openArray();
+    for (auto i : shape) {
+      builder.add(VPackValue(i));
+    }
+    builder.close();
+  }
+}
+
+void AqlValue::getNdArrayShape(VPackBuilder& builder, size_t i) const {
+  TRI_ASSERT(canTurnIntoNdarray());
+  if (isVackNdarray()) {
+    VPackSlice shape = slice()["_shape"];
+    if (i >= shape.length()) {
+      THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE, "out of range");
+    }
+    builder.add(shape.at(i));
+  } else {
+    auto shape = _data.ndArrayMeta.pointer->shape();
+    if (i >= shape.size()) {
+      THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE, "out of range");
+    }
+    builder.add(VPackValue(shape[i]));
+  }
+}
+
+void AqlValue::getNdArrayShape(VPackBuilder& builder,
+                               std::string_view axisName) const {
+  TRI_ASSERT(canTurnIntoNdarray());
+  if (isVackNdarray()) {
+    VPackSlice shape = slice()["_shape"];
+    if (!slice().hasKey("_axes")) {
+      THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
+                                     "Without this axis");
+    }
+    VPackSlice axes = slice()["_axes"];
+    for (size_t i = 0; i < axes.length(); i++) {
+      if (axes.at(i).toString() == axisName) {
+        builder.add(shape.at(i));
+        return;
+      }
+    }
+    // 现在一定没找到
+    THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE, "Without this axis");
+  } else {
+    auto shape = _data.ndArrayMeta.pointer->shape();
+    const auto& axes = _data.ndArrayMeta.pointer->getAxisNames();
+    for (size_t i = 0; i < axes.size(); i++) {
+      if (axes.at(i).has_value() && axes.at(i).value() == axisName) {
+        builder.add(VPackValue(shape.at(i)));
+        return;
+      }
+    }
+    // 现在一定没找到
+    THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE, "Without this axis");
+  }
+}
+
+size_t AqlValue::getNdArrayDimension() const noexcept {
+  TRI_ASSERT(canTurnIntoNdarray());
+  if (isVackNdarray()) {
+    return slice()["_shape"].length();
+  } else {
+    return _data.ndArrayMeta.pointer->dimension();
+  }
+};
 
 size_t std::hash<AqlValue>::operator()(AqlValue const& x) const noexcept {
   auto t = x.type();

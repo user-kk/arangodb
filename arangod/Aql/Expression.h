@@ -206,6 +206,10 @@ class Expression {
   static AqlValue executeSimpleExpressionBuildRangeIndex(ExpressionContext& ctx,
                                                          AstNode const*,
                                                          bool& mustDestroy);
+  // 形成一个name索引的对象{"axis":"轴名称",value:数组或int}
+  static AqlValue executeSimpleExpressionBuildNameIndex(ExpressionContext& ctx,
+                                                        AstNode const*,
+                                                        bool& mustDestroy);
 
   // execute an expression of type SIMPLE with ARRAY
   static AqlValue executeSimpleExpressionArray(ExpressionContext& ctx,

@@ -25,6 +25,7 @@
 
 #include "Aql/AqlItemBlock.h"
 #include "Aql/Ast.h"
+#include "Aql/AstNode.h"
 #include "Aql/AsyncExecutor.h"
 #include "Aql/CalculationExecutor.h"
 #include "Aql/ClusterNodes.h"
@@ -1944,6 +1945,29 @@ EnumerateListNode::EnumerateListNode(ExecutionPlan* plan, ExecutionNodeId id,
       _outVariable(outVariable) {
   TRI_ASSERT(_inVariable != nullptr);
   TRI_ASSERT(_outVariable != nullptr);
+  if (option != nullptr && option->type == NODE_TYPE_NOP) {
+    _forNdarrayInfo.mode = ForNdarrayInfo::DEFAULT;
+  } else if (option != nullptr && option->type == NODE_TYPE_ARRAY) {
+    _forNdarrayInfo.mode = ForNdarrayInfo::ALL;
+    std::set<std::string_view> set;
+    for (size_t i = 0; i < option->numMembers(); i++) {
+      AstNode* number = option->getMemberUnchecked(i);
+      if (number->type == NODE_TYPE_VALUE &&
+          number->isValueType(AstNodeValueType::VALUE_TYPE_STRING)) {
+        std::string_view name(number->value.value._string,
+                              number->value.length);
+        if (set.contains(name)) {
+          THROW_ARANGO_EXCEPTION_MESSAGE(
+              TRI_ERROR_QUERY_PARSE, "the alias of axis must not be repeated");
+        } else {
+          set.insert(name);
+        }
+        _forNdarrayInfo.axisAlias.emplace_back(std::string(name));
+      } else {
+        _forNdarrayInfo.axisAlias.push_back(std::nullopt);
+      }
+    }
+  }
 }
 
 EnumerateListNode::EnumerateListNode(ExecutionPlan* plan,
@@ -1998,7 +2022,7 @@ std::unique_ptr<ExecutionBlock> EnumerateListNode::createBlock(
   }
   auto executorInfos = EnumerateListExecutorInfos(
       inputRegister, outRegister, engine.getQuery(), filter(), _outVariable->id,
-      std::move(varsToRegs), _forNdarray);
+      std::move(varsToRegs), _forNdarrayInfo);
   return std::make_unique<ExecutionBlockImpl<EnumerateListExecutor>>(
       &engine, this, std::move(registerInfos), std::move(executorInfos));
 }
@@ -2008,7 +2032,7 @@ ExecutionNode* EnumerateListNode::clone(ExecutionPlan* plan,
                                         bool withDependencies) const {
   auto c =
       std::make_unique<EnumerateListNode>(plan, _id, _inVariable, _outVariable);
-  c->_forNdarray = _forNdarray;
+  c->_forNdarrayInfo = _forNdarrayInfo;
 
   if (hasFilter()) {
     c->setFilter(_filter->clone(plan->getAst(), true));

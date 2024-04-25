@@ -38,6 +38,7 @@ class Ndarray {
  public:
   friend NdarrayOperator;
   enum ValueType { INT_TYPE = 0, FLOAT_TYPE = 1, DOUBLE_TYPE = 2, ERROR = 3 };
+  using AxisNameType = std::vector<std::optional<std::string>>;
 
   Ndarray() = default;
   Ndarray(const Ndarray& array) : _type(array._type), _data(array._data) {}
@@ -79,28 +80,38 @@ class Ndarray {
   auto shape() {
     return std::visit([](auto& data) { return data.shape(); }, _data);
   }
-  void getElemVpack(size_t index, VPackBuilder& builder) {
+  void getElemVpack(size_t index, VPackBuilder& builder,
+                    const AxisNameType& aliasName) {
     builder.openObject();
     TRI_ASSERT(index < size());
     auto indice = xt::unravel_index(index, shape());
     size_t n = dimension();
-    if (_axisNames.empty()) {
-      for (size_t i = 0; i < n; i++) {
-        builder.add("_" + std::to_string(i), VPackValue(indice[i]));
-      }
-    } else {
-      TRI_ASSERT(n == _axisNames.size());
-      for (size_t i = 0; i < n; i++) {
-        builder.add(_axisNames[i].has_value() ? _axisNames[i].value()
-                                              : "_" + std::to_string(i),
-                    VPackValue(indice[i]));
+
+    for (size_t i = 0; i < n; i++) {
+      if (checkAxisNameValid(aliasName, i + 1)) {
+        builder.add(aliasName[i + 1].value(), VPackValue(indice[i]));
+      } else {
+        if (checkAxisNameValid(_axisNames, i)) {
+          builder.add(_axisNames[i].value(), VPackValue(indice[i]));
+        } else {
+          builder.add("_axis" + std::to_string(i), VPackValue(indice[i]));
+        }
       }
     }
     std::variant<int, double> value = flat(index);
     if (value.index() == 0) {
-      builder.add("_val", VPackValue(std::get<0>(value)));
+      if (checkAxisNameValid(aliasName, 0)) {
+        builder.add(aliasName[0].value(), VPackValue(std::get<0>(value)));
+      } else {
+        builder.add("_val", VPackValue(std::get<0>(value)));
+      }
+
     } else {
-      builder.add("_val", VPackValue(std::get<1>(value)));
+      if (checkAxisNameValid(aliasName, 0)) {
+        builder.add(aliasName[0].value(), VPackValue(std::get<1>(value)));
+      } else {
+        builder.add("_val", VPackValue(std::get<1>(value)));
+      }
     }
     builder.close();
   }
@@ -117,6 +128,15 @@ class Ndarray {
 
   size_t size() {
     return std::visit([](auto& data) { return data.size(); }, _data);
+  }
+
+  int axisIndexFromName(std::string_view name) const {
+    for (size_t i = 0; i < _axisNames.size(); i++) {
+      if (_axisNames[i].has_value() && _axisNames[i].value() == name) {
+        return i;
+      }
+    }
+    return -1;
   }
 
   void toVPack(VPackBuilder& builder) {
@@ -272,10 +292,9 @@ class Ndarray {
   }
 
   template<typename T>
-  static Ndarray* fromVPackArray(
-      VPackSlice arraySlice,
-      const std::vector<std::optional<std::string>>& axisNames,
-      const std::vector<int>& shape) {
+  static Ndarray* fromVPackArray(VPackSlice arraySlice,
+                                 const AxisNameType& axisNames,
+                                 const std::vector<int>& shape) {
     Ndarray* ret = new Ndarray;
     xt::xarray<T> array;
     xt::from_json(nlohmann::json::parse(arraySlice.toJson()), array);
@@ -285,8 +304,7 @@ class Ndarray {
     ret->_data = std::move(array);
     ret->setType<T>();
     if (!axisNames.empty()) {
-      std::vector<std::optional<std::string>> names(ret->dimension(),
-                                                    std::nullopt);
+      AxisNameType names(ret->dimension(), std::nullopt);
       for (size_t i = 0; i < axisNames.size(); i++) {
         if (i >= names.size()) {
           break;
@@ -299,11 +317,99 @@ class Ndarray {
     return ret;
   }
 
-  std::vector<std::optional<std::string>>& getAxisNames() { return _axisNames; }
+  template<typename T>
+  static Ndarray* fromOtherNdarray(Ndarray* other,
+                                   const AxisNameType& axisNames,
+                                   const std::vector<int>& shape) {
+    if (axisNames.size() != 0 && shape.size() != 0 &&
+        axisNames.size() != shape.size()) {
+      THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
+                                     "error: axisNames size != shape size");
+    }
+    Ndarray* ret = new Ndarray;
+    xt::xarray<T> array;
+    std::visit([&array](auto data) { array = data; }, other->_data);
 
-  void setAxisNames(std::vector<std::optional<std::string>> names) {
-    _axisNames = std::move(names);
+    if (!shape.empty()) {
+      array.reshape(shape);
+    }
+    ret->_data = std::move(array);
+    ret->setType<T>();
+
+    if (!axisNames.empty()) {
+      ret->setAxisNames(axisNames);
+    } else {
+      // 当不修改或修改后维度数不变的时候,继承原来的轴名称
+      if (shape.empty() || shape.size() == other->size()) {
+        ret->_axisNames = other->_axisNames;
+      }
+    }
+
+    return ret;
   }
+
+  template<typename T>
+  static Ndarray* fromOtherVPack(VPackSlice slice,
+                                 const AxisNameType& axisNames,
+                                 const std::vector<int>& shape) {
+    TRI_ASSERT(slice.isObject());
+    TRI_ASSERT(slice.hasKey("_type") && slice["_type"].toString() == "ndarray");
+    if (axisNames.size() != 0 && shape.size() != 0 &&
+        axisNames.size() != shape.size()) {
+      THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
+                                     "error: axisNames size != shape size");
+    }
+    Ndarray* ret = new Ndarray();
+
+    // otherVpack中的shape
+    containers::SmallVector<size_t, 4> otherShape;
+    for (auto i : VPackArrayIterator(slice.get("_shape"))) {
+      otherShape.push_back(i.getInt());
+    }
+
+    // 轴
+    if (!axisNames.empty()) {
+      ret->setAxisNames(axisNames);
+    } else {
+      // 当不修改或修改后维度数不变的时候,继承原来的轴名称
+      if (shape.empty() || shape.size() == otherShape.size()) {
+        if (slice.hasKey("_axes")) {
+          for (auto i : VPackArrayIterator(slice.get("_axes"))) {
+            if (i.isString()) {
+              ret->_axisNames.push_back(i.toString());
+            } else {
+              ret->_axisNames.push_back(std::nullopt);
+            }
+          }
+        }
+      }
+    }
+    // 类型和形状
+    size_t n = std::reduce(otherShape.begin(), otherShape.end(), 1,
+                           std::multiplies<size_t>());
+    ret->init<T>(n);
+    // 值
+    VPackSlice valueSlice = slice.get("_value");
+    std::visit(
+        [&valueSlice](auto& data) {
+          size_t i = 0;
+          buildXarray(data, valueSlice, i);
+        },
+        ret->_data);
+    if (!shape.empty()) {
+      // 重新塑形
+      std::visit([&shape](auto& data) { data.reshape(shape); }, ret->_data);
+    } else {
+      std::visit([&otherShape](auto& data) { data.reshape(otherShape); },
+                 ret->_data);
+    }
+
+    return ret;
+  }
+
+  AxisNameType& getAxisNames() { return _axisNames; }
+
+  void setAxisNames(AxisNameType names) { _axisNames = std::move(names); }
 
   size_t dimension() {
     return std::visit([](auto& data) { return data.dimension(); }, _data);
@@ -334,7 +440,7 @@ class Ndarray {
  private:
   ValueType _type = ERROR;
   DataType _data;
-  std::vector<std::optional<std::string>> _axisNames;
+  AxisNameType _axisNames;
   std::unique_ptr<VPackBuilder> _ndArrayBuilder;
   static constexpr std::array<std::string, 3> valueTypeMap = {"int", "float",
                                                               "double"};
@@ -351,6 +457,16 @@ class Ndarray {
     } else {
       _type = ERROR;
     }
+  }
+  bool checkAxisNameValid(const AxisNameType& names, size_t i) {
+    if (i >= names.size()) {
+      return false;
+    }
+
+    if (!names[i].has_value()) {
+      return false;
+    }
+    return true;
   }
 
   template<typename T>
@@ -383,6 +499,11 @@ class Ndarray {
       _data.emplace<xt::xarray<float>>(xt::xarray<float>::shape_type({n}));
       _type = FLOAT_TYPE;
     }
+  }
+  template<typename T>
+  void init(size_t n) {
+    _data.emplace<xt::xarray<T>>(typename xt::xarray<T>::shape_type({n}));
+    setType<T>();
   }
 };
 }  // namespace aql

@@ -747,7 +747,11 @@ class EnumerateCollectionNode : public ExecutionNode,
   IndexHint _hint;
 };
 
-enum class ForNdarray { DEFAULT, ALL };
+struct ForNdarrayInfo {
+  enum Mode { DEFAULT, ALL };
+  Mode mode = DEFAULT;
+  std::vector<std::optional<std::string>> axisAlias;
+};
 
 /// @brief class EnumerateListNode
 class EnumerateListNode : public ExecutionNode {
@@ -826,7 +830,7 @@ class EnumerateListNode : public ExecutionNode {
   /// @brief early filtering condition
   std::unique_ptr<Expression> _filter;
 
-  ForNdarray _forNdarray = ForNdarray::ALL;
+  ForNdarrayInfo _forNdarrayInfo;
 };
 
 /// @brief class LimitNode

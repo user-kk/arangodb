@@ -329,6 +329,10 @@ AqlValue MatTranspose(arangodb::aql::ExpressionContext*, AstNode const&,
                       VPackFunctionParametersView);
 AqlValue Reshape(arangodb::aql::ExpressionContext*, AstNode const&,
                  VPackFunctionParametersView);
+AqlValue Shape(arangodb::aql::ExpressionContext*, AstNode const&,
+               VPackFunctionParametersView);
+AqlValue Dimension(arangodb::aql::ExpressionContext*, AstNode const&,
+                   VPackFunctionParametersView);
 AqlValue Inv(arangodb::aql::ExpressionContext*, AstNode const&,
              VPackFunctionParametersView);
 AqlValue DocumentView(arangodb::aql::ExpressionContext*, AstNode const&,

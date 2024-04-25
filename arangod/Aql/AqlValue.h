@@ -33,6 +33,7 @@
 #include <velocypack/Slice.h>
 #include <velocypack/velocypack-common.h>
 #include <memory>
+#include <optional>
 #include <string_view>
 #include <variant>
 #include <vector>
@@ -438,6 +439,15 @@ struct AqlValue final {
                std::vector<std::string> const& names, bool& mustDestroy,
                bool copy) const;
   Ndarray* getNdArray() const noexcept { return _data.ndArrayMeta.pointer; }
+
+  void getNdArrayShape(VPackBuilder& builder) const noexcept;
+
+  void getNdArrayShape(VPackBuilder& builder, size_t i) const;
+
+  void getNdArrayShape(VPackBuilder& builder, std::string_view axis) const;
+
+  size_t getNdArrayDimension() const noexcept;
+
   bool hasKey(std::string_view name) const;
 
   /// @brief get the numeric value of an AqlValue

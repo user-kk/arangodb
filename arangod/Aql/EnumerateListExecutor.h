@@ -37,6 +37,7 @@
 #include "Aql/types.h"
 #include "Aql/Ndarray.hpp"
 #include "Transaction/Methods.h"
+#include <Aql/ExecutionNode.h>
 
 #include <memory>
 #include <optional>
@@ -59,7 +60,6 @@ class QueryContext;
 class RegisterInfos;
 template<BlockPassthrough>
 class SingleRowFetcher;
-enum class ForNdarray;
 
 class EnumerateListExpressionContext final : public QueryExpressionContext {
  public:
@@ -91,7 +91,7 @@ class EnumerateListExecutorInfos {
       RegisterId inputRegister, RegisterId outputRegister, QueryContext& query,
       Expression* filter, VariableId outputVariableId,
       std::vector<std::pair<VariableId, RegisterId>>&& varsToRegs,
-      ForNdarray forNdarray);
+      const ForNdarrayInfo& forNdarray);
 
   EnumerateListExecutorInfos() = delete;
   EnumerateListExecutorInfos(EnumerateListExecutorInfos&&) = default;
@@ -104,7 +104,7 @@ class EnumerateListExecutorInfos {
   VariableId getOutputVariableId() const noexcept;
   bool hasFilter() const noexcept;
   Expression* getFilter() const noexcept;
-  ForNdarray getForNdarray() const noexcept;
+  const ForNdarrayInfo& getForNdarrayInfo() const noexcept;
   std::vector<std::pair<VariableId, RegisterId>> const& getVarsToRegs()
       const noexcept;
 
@@ -117,7 +117,7 @@ class EnumerateListExecutorInfos {
   RegisterId const _outputRegister;
   VariableId const _outputVariableId;
   Expression* _filter;
-  ForNdarray _forNdarry;
+  ForNdarrayInfo _forNdarryInfo;
   // Input variable and register pairs required for the filter
   std::vector<std::pair<VariableId, RegisterId>> _varsToRegs;
 };

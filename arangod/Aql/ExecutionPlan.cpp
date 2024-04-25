@@ -65,6 +65,7 @@
 #include <absl/strings/str_cat.h>
 #include <velocypack/Iterator.h>
 #include <cstddef>
+#include <optional>
 #include <vector>
 
 using namespace arangodb;
@@ -1254,11 +1255,12 @@ ExecutionNode* ExecutionPlan::fromNodeFor(ExecutionNode* previous,
     // second operand is already a variable
     auto inVariable = static_cast<Variable*>(expression->getData());
     TRI_ASSERT(inVariable != nullptr);
-    en = createNode<EnumerateListNode>(this, nextId(), inVariable, v);
+    en = createNode<EnumerateListNode>(this, nextId(), inVariable, v, options);
   } else {
     // second operand is some misc. expression
     auto calc = createTemporaryCalculation(expression, previous);
-    en = createNode<EnumerateListNode>(this, nextId(), getOutVariable(calc), v);
+    en = createNode<EnumerateListNode>(this, nextId(), getOutVariable(calc), v,
+                                       options);
     previous = calc;
   }
 

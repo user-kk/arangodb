@@ -22,6 +22,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "Expression.h"
+#include <algorithm>
 
 #include "Aql/AqlItemBlock.h"
 #include "Aql/AqlValue.h"
@@ -508,6 +509,8 @@ AqlValue Expression::executeSimpleExpression(ExpressionContext& ctx,
                        "' is not supported in expressions"));
     case NODE_TYPE_RANGE_INDEX:
       return executeSimpleExpressionBuildRangeIndex(ctx, node, mustDestroy);
+    case NODE_TYPE_NAME_INDEX:
+      return executeSimpleExpressionBuildNameIndex(ctx, node, mustDestroy);
     default:
       std::string msg("unhandled type '");
       msg.append(node->getTypeString());
@@ -553,6 +556,22 @@ AqlValue Expression::executeSimpleExpressionBuildRangeIndex(
 
   builder->close();
   mustDestroy = true;  // AqlValue contains builder contains dynamic data
+  return AqlValue(builder->slice(), builder->size());
+}
+
+AqlValue Expression::executeSimpleExpressionBuildNameIndex(
+    ExpressionContext& ctx, AstNode const* node, bool& mustDestroy) {
+  auto& trx = ctx.trx();
+  transaction::BuilderLeaser builder(&trx);
+
+  builder->openObject();
+  builder->add("axis", VPackValue(node->getString()));
+  AqlValue indexResult = executeSimpleExpression(
+      ctx, node->getMemberUnchecked(0), mustDestroy, false);
+  AqlValueGuard guard(indexResult, mustDestroy);
+  builder->add("value", indexResult.slice());
+  builder->close();
+  mustDestroy = true;
   return AqlValue(builder->slice(), builder->size());
 }
 
@@ -703,23 +722,97 @@ AqlValue Expression::executeSimpleExpressionIndexedAccess(
         ctx.registerError(TRI_ERROR_QUERY_PARSE, "index dimension error");
         return AqlValue(AqlValueHintNull());
       }
-      size_t n = 0;
+      // 检验是否存在object(即是否有name index)
+      bool hasObject = false;
       for (auto i : VPackArrayIterator(indexResult.slice())) {
-        if (i.isArray()) {
-          TRI_ASSERT(i.length() == 3);
-          executeRangeIndexFormat(ctx, i, stridedSliceVector);
-
-        } else if (i.isInteger()) {
-          if (i.getInt() < 0 || i.getInt() >= static_cast<int64_t>(shape[n])) {
-            ctx.registerError(TRI_ERROR_QUERY_PARSE, "out of range");
-            return AqlValue(AqlValueHintNull());
+        if (i.isObject()) {
+          hasObject = true;
+        }
+      }
+      if (hasObject) {
+        // 检验是否全是object
+        bool all = true;
+        for (auto i : VPackArrayIterator(indexResult.slice())) {
+          if (!i.isObject()) {
+            all = false;
           }
-          stridedSliceVector.push_back(i.getInt());
-        } else {
-          ctx.registerError(TRI_ERROR_QUERY_PARSE, "range index format error");
+        }
+        if (!all) {
+          ctx.registerError(TRI_ERROR_QUERY_PARSE, "name index format error");
           return AqlValue(AqlValueHintNull());
         }
-        n++;
+      }
+      if (hasObject) {
+        // 到这里,应该全是name index 且维数正确
+        xt::xstrided_slice_vector newStridedSliceVector(dimension, 0);
+        int n = 0;
+        for (auto i : VPackArrayIterator(indexResult.slice())) {
+          std::string name = i["axis"].toString();
+          int asixIndex = result.getNdArray()->axisIndexFromName(name);
+          if (asixIndex == -1) {
+            ctx.registerError(TRI_ERROR_QUERY_PARSE, "This axis doesn't exist");
+            return AqlValue(AqlValueHintNull());
+          }
+          if (i["value"].isInteger()) {
+            int index = i["value"].getInt();
+
+            if (index < 0 || index >= static_cast<int64_t>(shape[n])) {
+              ctx.registerError(TRI_ERROR_QUERY_PARSE, "out of range");
+              return AqlValue(AqlValueHintNull());
+            }
+            newStridedSliceVector[asixIndex] = index;
+          } else if (i["value"].isArray()) {
+            xt::xstrided_slice_vector tmp;
+            tmp.reserve(1);
+
+            TRI_ASSERT(i["value"].length() == 3);
+            executeRangeIndexFormat(ctx, i["value"], tmp);
+            newStridedSliceVector[asixIndex] = tmp[0];
+          }
+          n++;
+        }
+        stridedSliceVector = std::move(newStridedSliceVector);
+
+      } else {
+        size_t n = 0;
+        for (auto i : VPackArrayIterator(indexResult.slice())) {
+          if (i.isArray()) {
+            TRI_ASSERT(i.length() == 3);
+            executeRangeIndexFormat(ctx, i, stridedSliceVector);
+
+          } else if (i.isInteger()) {
+            if (i.getInt() < 0 ||
+                i.getInt() >= static_cast<int64_t>(shape[n])) {
+              ctx.registerError(TRI_ERROR_QUERY_PARSE, "out of range");
+              return AqlValue(AqlValueHintNull());
+            }
+            stridedSliceVector.push_back(i.getInt());
+          } else {
+            ctx.registerError(TRI_ERROR_QUERY_PARSE,
+                              "range index format error");
+            return AqlValue(AqlValueHintNull());
+          }
+          n++;
+        }
+      }
+    } else if (indexResult.isObject()) {
+      if (dimension != 1) {
+        ctx.registerError(TRI_ERROR_QUERY_PARSE, "index dimension error");
+        return AqlValue(AqlValueHintNull());
+      }
+      if (!indexResult.hasKey("axis") || !indexResult.hasKey("value")) {
+        ctx.registerError(TRI_ERROR_QUERY_PARSE, "name index format error");
+        return AqlValue(AqlValueHintNull());
+      }
+      auto slice = indexResult.slice();
+      if (slice["value"].isInteger()) {
+        stridedSliceVector.push_back(slice["value"].getInt());
+      } else if (slice["value"].isArray()) {
+        TRI_ASSERT(slice["value"].length() == 3);
+        executeRangeIndexFormat(ctx, slice["value"], stridedSliceVector);
+      } else {
+        ctx.registerError(TRI_ERROR_QUERY_PARSE, "name index format error");
+        return AqlValue(AqlValueHintNull());
       }
     } else {
       ctx.registerError(TRI_ERROR_QUERY_PARSE, "range index format error");

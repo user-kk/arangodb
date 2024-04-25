@@ -112,13 +112,13 @@ EnumerateListExecutorInfos::EnumerateListExecutorInfos(
     RegisterId inputRegister, RegisterId outputRegister, QueryContext& query,
     Expression* filter, VariableId outputVariableId,
     std::vector<std::pair<VariableId, RegisterId>>&& varsToRegs,
-    ForNdarray forNdarray)
+    const ForNdarrayInfo& forNdarrayInfo)
     : _query(query),
       _inputRegister(inputRegister),
       _outputRegister(outputRegister),
       _outputVariableId(outputVariableId),
       _filter(filter),
-      _forNdarry(forNdarray),
+      _forNdarryInfo(forNdarrayInfo),
       _varsToRegs(std::move(varsToRegs)) {
   TRI_ASSERT(!hasFilter() ||
              _outputVariableId != std::numeric_limits<VariableId>::max());
@@ -153,8 +153,9 @@ EnumerateListExecutorInfos::getVarsToRegs() const noexcept {
   return _varsToRegs;
 }
 
-ForNdarray EnumerateListExecutorInfos::getForNdarray() const noexcept {
-  return _forNdarry;
+const ForNdarrayInfo& EnumerateListExecutorInfos::getForNdarrayInfo()
+    const noexcept {
+  return _forNdarryInfo;
 }
 
 EnumerateListExecutor::EnumerateListExecutor(Fetcher& fetcher,
@@ -356,8 +357,8 @@ AqlValue EnumerateListExecutor::getAqlValue(AqlValue const& inVarReg,
     THROW_ARANGO_EXCEPTION(TRI_ERROR_DEBUG);
   }
   if (inVarReg.canTurnIntoNdarray()) {
-    switch (_infos.getForNdarray()) {
-      case ForNdarray::DEFAULT: {
+    switch (_infos.getForNdarrayInfo().mode) {
+      case ForNdarrayInfo::DEFAULT: {
         std::variant<int, double> value;
         if (_ndarray.index() == 0) {
           value = std::get<0>(_ndarray)->flat(pos);
@@ -371,12 +372,14 @@ AqlValue EnumerateListExecutor::getAqlValue(AqlValue const& inVarReg,
           return AqlValue(AqlValueHintDouble(std::get<1>(value)));
         }
       }
-      case ForNdarray::ALL: {
+      case ForNdarrayInfo::ALL: {
         VPackBuilder builder;
         if (_ndarray.index() == 0) {
-          std::get<0>(_ndarray)->getElemVpack(pos, builder);
+          std::get<0>(_ndarray)->getElemVpack(
+              pos, builder, _infos.getForNdarrayInfo().axisAlias);
         } else {
-          std::get<1>(_ndarray)->getElemVpack(pos, builder);
+          std::get<1>(_ndarray)->getElemVpack(
+              pos, builder, _infos.getForNdarrayInfo().axisAlias);
         }
         mustDestroy = true;
         return AqlValue(builder.slice());

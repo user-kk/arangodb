@@ -677,7 +677,7 @@ AqlValue Expression::executeSimpleExpressionIndexedAccess(
                                     //! 必须先检测是否为NdarrayVpack后检测是否为object
                                     //! 因为是vpack同时必是object
     auto ptr = result.getTurnIntoNdarray();
-    Ndarray* resultNdarray = getNdarrayPtr(ptr);
+    const Ndarray* resultNdarray = getNdarrayPtr(ptr);
     AqlValue indexResult =
         executeSimpleExpression(ctx, index, mustDestroy, false);
 

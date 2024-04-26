@@ -77,6 +77,7 @@
 #include <velocypack/Iterator.h>
 
 #include <algorithm>
+#include <memory>
 
 using namespace arangodb;
 using namespace arangodb::aql;
@@ -1942,13 +1943,14 @@ EnumerateListNode::EnumerateListNode(ExecutionPlan* plan, ExecutionNodeId id,
                                      AstNode* option)
     : ExecutionNode(plan, id),
       _inVariable(inVariable),
-      _outVariable(outVariable) {
+      _outVariable(outVariable),
+      _forNdarrayInfo(std::make_unique<ForNdarrayInfo>()) {
   TRI_ASSERT(_inVariable != nullptr);
   TRI_ASSERT(_outVariable != nullptr);
   if (option != nullptr && option->type == NODE_TYPE_NOP) {
-    _forNdarrayInfo.mode = ForNdarrayInfo::DEFAULT;
+    _forNdarrayInfo->mode = ForNdarrayInfo::DEFAULT;
   } else if (option != nullptr && option->type == NODE_TYPE_ARRAY) {
-    _forNdarrayInfo.mode = ForNdarrayInfo::ALL;
+    _forNdarrayInfo->mode = ForNdarrayInfo::ALL;
     std::set<std::string_view> set;
     for (size_t i = 0; i < option->numMembers(); i++) {
       AstNode* number = option->getMemberUnchecked(i);
@@ -1962,9 +1964,9 @@ EnumerateListNode::EnumerateListNode(ExecutionPlan* plan, ExecutionNodeId id,
         } else {
           set.insert(name);
         }
-        _forNdarrayInfo.axisAlias.emplace_back(std::string(name));
+        _forNdarrayInfo->axisAlias.emplace_back(std::string(name));
       } else {
-        _forNdarrayInfo.axisAlias.push_back(std::nullopt);
+        _forNdarrayInfo->axisAlias.push_back(std::nullopt);
       }
     }
   }
@@ -2022,7 +2024,7 @@ std::unique_ptr<ExecutionBlock> EnumerateListNode::createBlock(
   }
   auto executorInfos = EnumerateListExecutorInfos(
       inputRegister, outRegister, engine.getQuery(), filter(), _outVariable->id,
-      std::move(varsToRegs), _forNdarrayInfo);
+      std::move(varsToRegs), *_forNdarrayInfo);
   return std::make_unique<ExecutionBlockImpl<EnumerateListExecutor>>(
       &engine, this, std::move(registerInfos), std::move(executorInfos));
 }
@@ -2032,7 +2034,11 @@ ExecutionNode* EnumerateListNode::clone(ExecutionPlan* plan,
                                         bool withDependencies) const {
   auto c =
       std::make_unique<EnumerateListNode>(plan, _id, _inVariable, _outVariable);
-  c->_forNdarrayInfo = _forNdarrayInfo;
+  if (_forNdarrayInfo != nullptr) {
+    c->_forNdarrayInfo = std::make_unique<ForNdarrayInfo>();
+    c->_forNdarrayInfo->mode = _forNdarrayInfo->mode;
+    c->_forNdarrayInfo->axisAlias = _forNdarrayInfo->axisAlias;
+  }
 
   if (hasFilter()) {
     c->setFilter(_filter->clone(plan->getAst(), true));

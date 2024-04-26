@@ -510,7 +510,8 @@ struct AqlValue final {
 
   /// @brief return turn into ndarray
   ///@details 当返回裸指针时,不用销毁,返回unique_ptr时需要销毁
-  std::variant<Ndarray*, std::unique_ptr<Ndarray>> getTurnIntoNdarray() const;
+  std::variant<const Ndarray*, std::unique_ptr<const Ndarray>>
+  getTurnIntoNdarray() const;
 
  private:
   /// @brief initializes value from a slice, when the length is already known

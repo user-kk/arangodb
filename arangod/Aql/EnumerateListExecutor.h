@@ -191,7 +191,7 @@ class EnumerateListExecutor {
   size_t _inputArrayLength;
   std::unique_ptr<EnumerateListExpressionContext> _expressionContext;
   // 如果是ndarray,需要将Ndarray的指针存放起来
-  std::variant<Ndarray*, std::unique_ptr<Ndarray>> _ndarray;
+  std::variant<const Ndarray*, std::unique_ptr<const Ndarray>> _ndarray;
 };
 
 }  // namespace aql

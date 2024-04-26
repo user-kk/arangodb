@@ -966,8 +966,6 @@ VPackSlice AqlValue::slice(AqlValueType type) const {
       return VPackSlice{_data.managedSliceMeta.pointer};
     case VPACK_MANAGED_STRING:
       return _data.managedStringMeta.toSlice();
-    case NDARRAY:
-      return _data.ndArrayMeta.pointer->getSlice();
     default:
       THROW_ARANGO_EXCEPTION(TRI_ERROR_ARANGO_DOCUMENT_TYPE_INVALID);
   }
@@ -982,8 +980,8 @@ bool AqlValue::isVackNdarray() const noexcept {
   return false;
 }
 
-std::variant<Ndarray*, std::unique_ptr<Ndarray>> AqlValue::getTurnIntoNdarray()
-    const {
+std::variant<const Ndarray*, std::unique_ptr<const Ndarray>>
+AqlValue::getTurnIntoNdarray() const {
   if (isNdArray()) {
     return _data.ndArrayMeta.pointer;
   }

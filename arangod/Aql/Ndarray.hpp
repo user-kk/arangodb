@@ -82,15 +82,15 @@ class Ndarray {
     return std::get<xt::xarray<T>>(_data);
   }
 
-  bool empty() {
+  bool empty() const {
     return std::visit([](auto data) { return data.begin() == data.end(); },
                       _data);
   }
-  auto shape() {
+  auto shape() const {
     return std::visit([](auto& data) { return data.shape(); }, _data);
   }
 
-  Ndarray* clone() {
+  Ndarray* clone() const {
     Ndarray* ret = new Ndarray;
     ret->_axisNames = _axisNames;
     ret->_data = _data;
@@ -100,7 +100,7 @@ class Ndarray {
 
   ///@brief 枚举Ndarray的每一个元素
   void getElemVpack(size_t index, VPackBuilder& builder,
-                    const AxisNameType& aliasName) {
+                    const AxisNameType& aliasName) const {
     builder.openObject();
     TRI_ASSERT(index < size());
     auto indice = xt::unravel_index(index, shape());
@@ -135,7 +135,7 @@ class Ndarray {
     builder.close();
   }
 
-  std::variant<int, double> flat(size_t i) {
+  std::variant<int, double> flat(size_t i) const {
     if (_type == INT_TYPE) {
       return get<int>().flat(i);
     } else if (_type == FLOAT_TYPE) {
@@ -160,7 +160,7 @@ class Ndarray {
   }
 
   ///@brief ndarray -> vpack
-  void toVPack(VPackBuilder& builder) {
+  void toVPack(VPackBuilder& builder) const {
     // 断言当前一定被初始化了
     TRI_ASSERT(_type != ERROR);
 
@@ -246,15 +246,7 @@ class Ndarray {
     builder.close();
   }
 
-  VPackSlice getSlice() {
-    if (_ndArrayBuilder == nullptr) {
-      _ndArrayBuilder = std::make_unique<VPackBuilder>();
-      toVPack(*_ndArrayBuilder);
-    }
-    return _ndArrayBuilder->slice();
-  }
-
-  Ndarray* filter(Ndarray* v) {
+  Ndarray* filter(const Ndarray* v) const {
     TRI_ASSERT(v->_type == INT_TYPE);
     TRI_ASSERT(_type != ERROR);
     Ndarray* ret = new Ndarray;
@@ -453,11 +445,11 @@ class Ndarray {
     return ret;
   }
 
-  AxisNameType& getAxisNames() { return _axisNames; }
+  const AxisNameType& getAxisNames() const { return _axisNames; }
 
   void setAxisNames(AxisNameType names) { _axisNames = std::move(names); }
 
-  size_t dimension() {
+  size_t dimension() const {
     return std::visit([](auto& data) { return data.dimension(); }, _data);
   }
 
@@ -468,7 +460,7 @@ class Ndarray {
     return this->_data != other._data;
   }
 
-  size_t getMemoryUsage() {
+  size_t getMemoryUsage() const {
     size_t usage = 0;
     if (_type == INT_TYPE) {
       usage = get<int>().size() * sizeof(int);
@@ -477,9 +469,7 @@ class Ndarray {
     } else if (_type == FLOAT_TYPE) {
       usage = get<float>().size() * sizeof(float);
     }
-    size_t builderUsage =
-        _ndArrayBuilder == nullptr ? 0 : _ndArrayBuilder->slice().byteSize();
-    return usage + sizeof(*this) + builderUsage;
+    return usage + sizeof(*this);
   }
 
   std::string getNdarrayData() {
@@ -505,7 +495,6 @@ class Ndarray {
   ValueType _type = ERROR;
   DataType _data;
   AxisNameType _axisNames;
-  std::unique_ptr<VPackBuilder> _ndArrayBuilder;
   static constexpr std::array<std::string, 3> valueTypeMap = {"int", "float",
                                                               "double"};
 
@@ -522,7 +511,7 @@ class Ndarray {
       _type = ERROR;
     }
   }
-  bool checkAxisNameValid(const AxisNameType& names, size_t i) {
+  bool checkAxisNameValid(const AxisNameType& names, size_t i) const {
     if (i >= names.size()) {
       return false;
     }
@@ -572,8 +561,8 @@ class Ndarray {
     setType<T>();
   }
 };
-inline Ndarray* getNdarrayPtr(
-    const std::variant<Ndarray*, std::unique_ptr<Ndarray>>& ptr) {
+inline const Ndarray* getNdarrayPtr(
+    const std::variant<const Ndarray*, std::unique_ptr<const Ndarray>>& ptr) {
   if (ptr.index() == 0) {
     return std::get<0>(ptr);
   } else {

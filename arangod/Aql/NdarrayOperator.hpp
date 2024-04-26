@@ -13,7 +13,7 @@ class NdarrayOperator {
   enum BinaryOperator { ADD, SUB, MUL, DIV, MOD, MATMUL };
   enum SingleAggOperator { SUM, COUNT_NON_ZERO };
   enum CompareOperator { EQ, NE, LT, LE, GT, GE, AND, OR };
-  static Ndarray* reshape(Ndarray* array, const std::vector<int>& shape) {
+  static Ndarray* reshape(const Ndarray* array, const std::vector<int>& shape) {
     Ndarray* ret = new Ndarray(*array);
     std::visit([&shape](auto& data) { data.reshape(shape); }, ret->_data);
     return ret;
@@ -157,7 +157,7 @@ class NdarrayOperator {
                                    "They can't all be scalars");
   }
 
-  static Ndarray* aggCompute(Ndarray* v, SingleAggOperator op,
+  static Ndarray* aggCompute(const Ndarray* v, SingleAggOperator op,
                              std::vector<size_t> axis) {
     Ndarray* ret = new Ndarray;
     switch (op) {
@@ -344,7 +344,8 @@ class NdarrayOperator {
                                    "They can't all be scalars");
   }
 
-  static Ndarray* transpose(Ndarray* v, const std::vector<int>& permutation) {
+  static Ndarray* transpose(const Ndarray* v,
+                            const std::vector<int>& permutation) {
     Ndarray* ret = new Ndarray;
     if (v->_type == Ndarray::INT_TYPE) {
       if (permutation.empty()) {
@@ -372,7 +373,7 @@ class NdarrayOperator {
     ret->_type = v->_type;
     return ret;
   }
-  static Ndarray* abs(Ndarray* array) {
+  static Ndarray* abs(const Ndarray* array) {
     Ndarray* ret = new Ndarray;
     if (array->_type == Ndarray::INT_TYPE) {
       xt::xarray<int> v = xt::abs(array->get<int>());
@@ -387,7 +388,7 @@ class NdarrayOperator {
     ret->_type = array->_type;
     return ret;
   }
-  static Ndarray* sqrt(Ndarray* array) {
+  static Ndarray* sqrt(const Ndarray* array) {
     Ndarray* ret = new Ndarray;
     xt::xarray<double> v;
     std::visit([&v](auto& data) { v = xt::sqrt(data); }, array->_data);
@@ -395,7 +396,7 @@ class NdarrayOperator {
     ret->_type = Ndarray::DOUBLE_TYPE;
     return ret;
   }
-  static Ndarray* power(Ndarray* array, double i) {
+  static Ndarray* power(const Ndarray* array, double i) {
     Ndarray* ret = new Ndarray;
     xt::xarray<double> v;
     std::visit([&v, i](auto& data) { v = xt::pow(data, i); }, array->_data);
@@ -404,7 +405,7 @@ class NdarrayOperator {
     return ret;
   }
 
-  static Ndarray* exp(Ndarray* array) {
+  static Ndarray* exp(const Ndarray* array) {
     Ndarray* ret = new Ndarray;
     xt::xarray<double> v;
     std::visit([&v](auto& data) { v = xt::exp(data); }, array->_data);
@@ -413,7 +414,7 @@ class NdarrayOperator {
     return ret;
   }
 
-  static Ndarray* inv(Ndarray* array) {
+  static Ndarray* inv(const Ndarray* array) {
     Ndarray* ret = new Ndarray;
     if (array->_type == Ndarray::INT_TYPE) {
       xt::xarray<double> v =
@@ -431,7 +432,8 @@ class NdarrayOperator {
     }
     return ret;
   }
-  static Ndarray* slice(Ndarray* array, const xt::xstrided_slice_vector& k) {
+  static Ndarray* slice(const Ndarray* array,
+                        const xt::xstrided_slice_vector& k) {
     Ndarray* ret = new Ndarray;
     if (array->_type == Ndarray::INT_TYPE) {
       xt::xarray<int> v = xt::strided_view(array->get<int>(), k);
@@ -446,7 +448,7 @@ class NdarrayOperator {
     ret->_type = array->_type;
     return ret;
   }
-  static Ndarray* getNot(Ndarray* array) {
+  static Ndarray* getNot(const Ndarray* array) {
     Ndarray* ret = new Ndarray;
     if (array->_type != Ndarray::INT_TYPE) {
       THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
@@ -456,7 +458,7 @@ class NdarrayOperator {
     ret->setType<int>();
     return ret;
   }
-  static Ndarray* getNegative(Ndarray* array) {
+  static Ndarray* getNegative(const Ndarray* array) {
     Ndarray* ret = new Ndarray;
     if (array->_type == Ndarray::INT_TYPE) {
       xt::xarray<int> v = (-array->get<int>());

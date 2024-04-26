@@ -830,7 +830,7 @@ class EnumerateListNode : public ExecutionNode {
   /// @brief early filtering condition
   std::unique_ptr<Expression> _filter;
 
-  ForNdarrayInfo _forNdarrayInfo;
+  std::unique_ptr<ForNdarrayInfo> _forNdarrayInfo;
 };
 
 /// @brief class LimitNode

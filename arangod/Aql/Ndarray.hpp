@@ -9,6 +9,7 @@
 #include <memory>
 #include <numeric>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -36,6 +37,11 @@ struct is_xarray : std::false_type {};
 template<typename T>
 struct is_xarray<xt::xarray<T>> : std::true_type {};
 
+template<typename T, typename... Args>
+struct is_one_of {
+  static constexpr bool value = (std::is_same<T, Args>::value || ...);
+};
+
 class Ndarray {
  public:
   friend NdarrayOperator;
@@ -47,6 +53,7 @@ class Ndarray {
   Ndarray(const Ndarray& array) : _type(array._type), _data(array._data) {}
 
   template<typename T>
+    requires is_one_of<T, int, double, float>::value
   Ndarray(T initVal, std::vector<size_t> shape) {
     if constexpr (std::is_same_v<T, int>) {
       _type = INT_TYPE;
@@ -57,9 +64,6 @@ class Ndarray {
     } else if constexpr (std::is_same_v<T, double>) {
       _type = DOUBLE_TYPE;
       _data.emplace<xt::xarray<double>>(xt::xarray<double>::shape_type(shape));
-    } else {
-      THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
-                                     "This type is not allowed");
     }
     std::visit([initVal](auto& data) { data.fill(initVal); }, _data);
   }
@@ -67,11 +71,13 @@ class Ndarray {
       std::variant<xt::xarray<int>, xt::xarray<float>, xt::xarray<double>>;
 
   template<typename T>
+    requires is_one_of<T, int, double, float>::value
   auto& get() {
     return std::get<xt::xarray<T>>(_data);
   }
 
   template<typename T>
+    requires is_one_of<T, int, double, float>::value
   const auto& get() const {
     return std::get<xt::xarray<T>>(_data);
   }
@@ -83,6 +89,16 @@ class Ndarray {
   auto shape() {
     return std::visit([](auto& data) { return data.shape(); }, _data);
   }
+
+  Ndarray* clone() {
+    Ndarray* ret = new Ndarray;
+    ret->_axisNames = _axisNames;
+    ret->_data = _data;
+    ret->_type = _type;
+    return ret;
+  }
+
+  ///@brief 枚举Ndarray的每一个元素
   void getElemVpack(size_t index, VPackBuilder& builder,
                     const AxisNameType& aliasName) {
     builder.openObject();
@@ -129,10 +145,11 @@ class Ndarray {
     }
   }
 
-  size_t size() {
+  size_t size() const {
     return std::visit([](auto& data) { return data.size(); }, _data);
   }
 
+  ///@brief axisname->轴的index
   int axisIndexFromName(std::string_view name) const {
     for (size_t i = 0; i < _axisNames.size(); i++) {
       if (_axisNames[i].has_value() && _axisNames[i].value() == name) {
@@ -142,6 +159,7 @@ class Ndarray {
     return -1;
   }
 
+  ///@brief ndarray -> vpack
   void toVPack(VPackBuilder& builder) {
     // 断言当前一定被初始化了
     TRI_ASSERT(_type != ERROR);
@@ -171,7 +189,7 @@ class Ndarray {
     auto thisShape = shape();
     builder.openObject();
     builder.add("_type", "ndarray");
-    // 轴名称
+    // 轴名称 轴可能为空,轴可能是null和int间隔的序列
     builder.add("_axes", VPackValue(velocypack::ValueType::Array));
     for (size_t i = 0; i < _axisNames.size(); i++) {
       if (_axisNames[i] == std::nullopt) {
@@ -277,6 +295,7 @@ class Ndarray {
     return true;
   }
 
+  ///@brief vpack -> ndarray
   static Ndarray* fromVpack(VPackSlice slice) {
     TRI_ASSERT(slice.isObject());
     TRI_ASSERT(slice.hasKey("_type") && slice["_type"].toString() == "ndarray");
@@ -313,6 +332,7 @@ class Ndarray {
     return ret;
   }
 
+  ///@brief 普通数组转Ndarray
   template<typename T>
   static Ndarray* fromVPackArray(VPackSlice arraySlice,
                                  const AxisNameType& axisNames,
@@ -339,8 +359,10 @@ class Ndarray {
     return ret;
   }
 
+  ///@brief 进行类型与轴重命名时使用
   template<typename T>
-  static Ndarray* fromOtherNdarray(Ndarray* other,
+    requires is_one_of<T, int, double, float>::value
+  static Ndarray* fromOtherNdarray(const Ndarray* other,
                                    const AxisNameType& axisNames,
                                    const std::vector<int>& shape) {
     if (axisNames.size() != 0 && shape.size() != 0 &&
@@ -370,7 +392,9 @@ class Ndarray {
     return ret;
   }
 
+  ///@brief 进行类型与轴重命名时使用
   template<typename T>
+    requires is_one_of<T, int, double, float>::value
   static Ndarray* fromOtherVPack(VPackSlice slice,
                                  const AxisNameType& axisNames,
                                  const std::vector<int>& shape) {
@@ -437,13 +461,12 @@ class Ndarray {
     return std::visit([](auto& data) { return data.dimension(); }, _data);
   }
 
-  template<typename T, typename Arg>
-  void set(Arg indice, T val) {
-    std::get<xt::xarray<T>>(_data)[std::forward<Arg>(indice)] = val;
+  bool operator==(const Ndarray& other) const {
+    return this->_data == other._data;
   }
-
-  bool operator==(const Ndarray& other) { return this->_data == other._data; }
-  bool operator!=(const Ndarray& other) { return this->_data != other._data; }
+  bool operator!=(const Ndarray& other) const {
+    return this->_data != other._data;
+  }
 
   size_t getMemoryUsage() {
     size_t usage = 0;
@@ -457,6 +480,25 @@ class Ndarray {
     size_t builderUsage =
         _ndArrayBuilder == nullptr ? 0 : _ndArrayBuilder->slice().byteSize();
     return usage + sizeof(*this) + builderUsage;
+  }
+
+  std::string getNdarrayData() {
+    if (_type == INT_TYPE) {
+      std::stringstream stream;
+      stream << get<int>();
+      return stream.str();
+    } else if (_type == DOUBLE_TYPE) {
+      std::stringstream stream;
+      stream << get<double>();
+      return stream.str();
+    } else if (_type == FLOAT_TYPE) {
+      std::stringstream stream;
+      stream << get<float>();
+      return stream.str();
+
+    } else {
+      return "error";
+    }
   }
 
  private:
@@ -492,6 +534,7 @@ class Ndarray {
   }
 
   template<typename T>
+    requires is_one_of<T, int, double, float>::value
   static void buildXarray(xt::xarray<T>& array, VPackSlice slice,
                           size_t& index) {
     if (!slice.isArray()) {
@@ -523,10 +566,19 @@ class Ndarray {
     }
   }
   template<typename T>
+    requires is_one_of<T, int, double, float>::value
   void init(size_t n) {
     _data.emplace<xt::xarray<T>>(typename xt::xarray<T>::shape_type({n}));
     setType<T>();
   }
 };
+inline Ndarray* getNdarrayPtr(
+    const std::variant<Ndarray*, std::unique_ptr<Ndarray>>& ptr) {
+  if (ptr.index() == 0) {
+    return std::get<0>(ptr);
+  } else {
+    return std::get<1>(ptr).get();
+  }
+}
 }  // namespace aql
 }  // namespace arangodb

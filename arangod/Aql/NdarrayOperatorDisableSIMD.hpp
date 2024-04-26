@@ -1,3 +1,4 @@
+#pragma once
 #undef XTENSOR_USE_XSIMD
 #include "Ndarray.hpp"
 #include <xtensor/xmath.hpp>

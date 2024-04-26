@@ -982,17 +982,6 @@ bool AqlValue::isVackNdarray() const noexcept {
   return false;
 }
 
-void AqlValue::turnIntoNdarray() {
-  if (isNdArray()) {
-    return;
-  }
-  TRI_ASSERT(this->isVackNdarray());
-  Ndarray* ndarray = Ndarray::fromVpack(this->slice());
-  this->destroy();
-  _data.ndArrayMeta.pointer = ndarray;
-  setType(AqlValueType::NDARRAY);
-}
-
 std::variant<Ndarray*, std::unique_ptr<Ndarray>> AqlValue::getTurnIntoNdarray()
     const {
   if (isNdArray()) {

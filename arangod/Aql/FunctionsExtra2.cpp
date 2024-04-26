@@ -12,52 +12,49 @@ AqlValue functions::NdarrayWhere(
   AqlValue filterValue = extractFunctionParameterValue(parameters, 0);
   AqlValue leftValue = extractFunctionParameterValue(parameters, 1);
   AqlValue rightValue = extractFunctionParameterValue(parameters, 2);
-  if (filterValue.canTurnIntoNdarray()) {
-    filterValue.turnIntoNdarray();
-  }
-  if (leftValue.canTurnIntoNdarray()) {
-    leftValue.turnIntoNdarray();
-  }
-  if (rightValue.canTurnIntoNdarray()) {
-    rightValue.turnIntoNdarray();
-  }
-  if (!filterValue.isNdArray()) {
+
+  if (!filterValue.canTurnIntoNdarray()) {
     // not a Ndarray
     registerWarning(expressionContext, "NdarrayWhere",
                     TRI_ERROR_QUERY_ARRAY_EXPECTED);
     return AqlValue(AqlValueHintNull());
   }
+  auto filterPtr = filterValue.getTurnIntoNdarray();
 
-  if (filterValue.getNdArray()->getValueType() != Ndarray::INT_TYPE) {
+  if (getNdarrayPtr(filterPtr)->getValueType() != Ndarray::INT_TYPE) {
     // value type error
     registerWarning(expressionContext, "NdarrayWhere",
                     TRI_ERROR_QUERY_ARRAY_EXPECTED);
     return AqlValue(AqlValueHintNull());
   }
-  auto& filter = filterValue.getNdArray()->get<int>();
-  if (leftValue.isNdArray() && rightValue.isNdArray()) {
-    return AqlValue(Ndop2::where(filter, *leftValue.getNdArray(),
-                                 *rightValue.getNdArray()));
-  } else if (leftValue.isNdArray()) {
+  auto& filter = getNdarrayPtr(filterPtr)->get<int>();
+  if (leftValue.canTurnIntoNdarray() && rightValue.canTurnIntoNdarray()) {
+    auto leftPtr = leftValue.getTurnIntoNdarray();
+    auto rightPtr = rightValue.getTurnIntoNdarray();
+    return AqlValue(Ndop2::where(filter, *getNdarrayPtr(leftPtr),
+                                 *getNdarrayPtr(rightPtr)));
+  } else if (leftValue.canTurnIntoNdarray()) {
+    auto leftPtr = leftValue.getTurnIntoNdarray();
     if (rightValue.isInt()) {
-      return AqlValue(Ndop2::where(filter, *leftValue.getNdArray(),
+      return AqlValue(Ndop2::where(filter, *getNdarrayPtr(leftPtr),
                                    static_cast<int>(rightValue.toInt64())));
     } else if (rightValue.isfloatOrDouble()) {
       return AqlValue(
-          Ndop2::where(filter, *leftValue.getNdArray(), rightValue.toDouble()));
+          Ndop2::where(filter, *getNdarrayPtr(leftPtr), rightValue.toDouble()));
     } else {
       registerWarning(expressionContext, "NdarrayWhere",
                       TRI_ERROR_QUERY_ARRAY_EXPECTED);
       return AqlValue(AqlValueHintNull());
     }
-  } else if (rightValue.isNdArray()) {
+  } else if (rightValue.canTurnIntoNdarray()) {
+    auto rightPtr = rightValue.getTurnIntoNdarray();
     if (leftValue.isInt()) {
       return AqlValue(Ndop2::where(filter,
                                    static_cast<int>(leftValue.toInt64()),
-                                   *rightValue.getNdArray()));
+                                   *getNdarrayPtr(rightPtr)));
     } else if (leftValue.isfloatOrDouble()) {
       return AqlValue(
-          Ndop2::where(filter, leftValue.toDouble(), *rightValue.getNdArray()));
+          Ndop2::where(filter, leftValue.toDouble(), *getNdarrayPtr(rightPtr)));
     } else {
       registerWarning(expressionContext, "NdarrayWhere",
                       TRI_ERROR_QUERY_ARRAY_EXPECTED);

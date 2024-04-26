@@ -1,3 +1,4 @@
+#pragma once
 #include <variant>
 #include <xtensor-blas/xlinalg.hpp>
 #include <xtensor/xmath.hpp>

@@ -652,6 +652,7 @@ void AqlFunctionFeature::addNdArrayFunctions() {
   add({"DIMENSION", ".", Function::makeFlags(), &functions::Dimension});
   add({"NDARRAY_WHERE", ".,.,.", Function::makeFlags(),
        &functions::NdarrayWhere});
+  add({"NDARRAY_VIEW", ".", Function::makeFlags(), &functions::NdarrayView});
 };
 }  // namespace aql
 }  // namespace arangodb

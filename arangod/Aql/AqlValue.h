@@ -438,7 +438,9 @@ struct AqlValue final {
   AqlValue get(CollectionNameResolver const& resolver,
                std::vector<std::string> const& names, bool& mustDestroy,
                bool copy) const;
-  Ndarray* getNdArray() const noexcept { return _data.ndArrayMeta.pointer; }
+  const Ndarray* getNdArray() const noexcept {
+    return _data.ndArrayMeta.pointer;
+  }
 
   void getNdArrayShape(VPackBuilder& builder) const noexcept;
 
@@ -505,8 +507,6 @@ struct AqlValue final {
   AqlValueType type() const noexcept {
     return static_cast<AqlValueType>(_data.aqlValueType);
   }
-  /// @brief turn into ndarray
-  void turnIntoNdarray();
 
   /// @brief return turn into ndarray
   ///@details 当返回裸指针时,不用销毁,返回unique_ptr时需要销毁

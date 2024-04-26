@@ -1,4 +1,5 @@
 #include "Aql/AqlValue.h"
+#include "Aql/Ndarray.hpp"
 #include "Aql/NdarrayOperator.hpp"
 #include "Functions.h"
 #include <cassert>
@@ -438,8 +439,9 @@ AqlValue functions::ToNdArrayf(
   AqlValue value = extractFunctionParameterValue(parameters, 0);
   AqlValue nameValue = extractFunctionParameterValue(parameters, 1);
   AqlValue shapeValue = extractFunctionParameterValue(parameters, 2);
-  if (!value.isArray() && !value.canTurnIntoNdarray()) {
-    // not an array or a Ndarray
+  if (!(value.isArray() || value.canTurnIntoNdarray() || value.isInt() ||
+        value.isfloatOrDouble())) {
+    // not an array or a Ndarray or an int or a double
     registerWarning(expressionContext, "ToNdArrayf",
                     TRI_ERROR_QUERY_ARRAY_EXPECTED);
     return AqlValue(AqlValueHintNull());
@@ -481,6 +483,11 @@ AqlValue functions::ToNdArrayf(
   if (!shapeValue.isNone()) {
     shape.reserve(shapeValue.length());
     for (auto i : VPackArrayIterator(shapeValue.slice())) {
+      if (i.getInt() < 0) {
+        THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
+                                       "The shape cannot be negative");
+        return AqlValue(AqlValueHintNull());
+      }
       shape.push_back(i.getInt());
     }
   }
@@ -490,9 +497,25 @@ AqlValue functions::ToNdArrayf(
   } else if (value.isVackNdarray()) {
     return AqlValue(
         Ndarray::fromOtherVPack<float>(value.slice(), names, shape));
-  } else {  // Ndarray
+  } else if (value.isNdArray()) {  // Ndarray
     return AqlValue(
         Ndarray::fromOtherNdarray<float>(value.getNdArray(), names, shape));
+  } else {  // int or double
+    if (shape.empty()) {
+      THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
+                                     "The shape cannot be empty");
+      return AqlValue(AqlValueHintNull());
+    }
+    float initVal = 0;
+    if (value.isInt()) {
+      initVal = value.toInt64();
+    } else {
+      initVal = value.toDouble();
+    }
+    Ndarray* array =
+        new Ndarray(initVal, std::vector<size_t>(shape.begin(), shape.end()));
+    array->setAxisNames(names);
+    return AqlValue(array);
   }
 }
 
@@ -502,8 +525,9 @@ AqlValue functions::ToNdArrayd(
   AqlValue value = extractFunctionParameterValue(parameters, 0);
   AqlValue nameValue = extractFunctionParameterValue(parameters, 1);
   AqlValue shapeValue = extractFunctionParameterValue(parameters, 2);
-  if (!value.isArray() && !value.canTurnIntoNdarray()) {
-    // not an array
+  if (!(value.isArray() || value.canTurnIntoNdarray() || value.isInt() ||
+        value.isfloatOrDouble())) {
+    // not an array or a Ndarray or an int or a double
     registerWarning(expressionContext, "ToNdArrayd",
                     TRI_ERROR_QUERY_ARRAY_EXPECTED);
     return AqlValue(AqlValueHintNull());
@@ -545,6 +569,11 @@ AqlValue functions::ToNdArrayd(
   if (!shapeValue.isNone()) {
     shape.reserve(shapeValue.length());
     for (auto i : VPackArrayIterator(shapeValue.slice())) {
+      if (i.getInt() < 0) {
+        THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
+                                       "The shape cannot be negative");
+        return AqlValue(AqlValueHintNull());
+      }
       shape.push_back(i.getInt());
     }
   }
@@ -555,9 +584,25 @@ AqlValue functions::ToNdArrayd(
   } else if (value.isVackNdarray()) {
     return AqlValue(
         Ndarray::fromOtherVPack<double>(value.slice(), names, shape));
-  } else {  // Ndarray
+  } else if (value.isNdArray()) {  // Ndarray
     return AqlValue(
         Ndarray::fromOtherNdarray<double>(value.getNdArray(), names, shape));
+  } else {  // int or double
+    if (shape.empty()) {
+      THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
+                                     "The shape cannot be empty");
+      return AqlValue(AqlValueHintNull());
+    }
+    double initVal = 0;
+    if (value.isInt()) {
+      initVal = value.toInt64();
+    } else {
+      initVal = value.toDouble();
+    }
+    Ndarray* array =
+        new Ndarray(initVal, std::vector<size_t>(shape.begin(), shape.end()));
+    array->setAxisNames(names);
+    return AqlValue(array);
   }
 }
 
@@ -567,9 +612,10 @@ AqlValue functions::ToNdArrayi(
   AqlValue value = extractFunctionParameterValue(parameters, 0);
   AqlValue nameValue = extractFunctionParameterValue(parameters, 1);
   AqlValue shapeValue = extractFunctionParameterValue(parameters, 2);
-  if (!value.isArray() && !value.canTurnIntoNdarray()) {
-    // not an array
-    registerWarning(expressionContext, "ToNdArrayi",
+  if (!(value.isArray() || value.canTurnIntoNdarray() || value.isInt() ||
+        value.isfloatOrDouble())) {
+    // not an array or a Ndarray or an int or a double
+    registerWarning(expressionContext, "ToNdArrayd",
                     TRI_ERROR_QUERY_ARRAY_EXPECTED);
     return AqlValue(AqlValueHintNull());
   }
@@ -610,6 +656,11 @@ AqlValue functions::ToNdArrayi(
   if (!shapeValue.isNone()) {
     shape.reserve(shapeValue.length());
     for (auto i : VPackArrayIterator(shapeValue.slice())) {
+      if (i.getInt() < 0) {
+        THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
+                                       "The shape cannot be negative");
+        return AqlValue(AqlValueHintNull());
+      }
       shape.push_back(i.getInt());
     }
   }
@@ -619,9 +670,25 @@ AqlValue functions::ToNdArrayi(
         value.isRange() ? slice : value.slice(), names, shape));
   } else if (value.isVackNdarray()) {
     return AqlValue(Ndarray::fromOtherVPack<int>(value.slice(), names, shape));
-  } else {  // Ndarray
+  } else if (value.isNdArray()) {  // Ndarray
     return AqlValue(
         Ndarray::fromOtherNdarray<int>(value.getNdArray(), names, shape));
+  } else {  // int or double
+    if (shape.empty()) {
+      THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
+                                     "The shape cannot be empty");
+      return AqlValue(AqlValueHintNull());
+    }
+    int initVal = 0;
+    if (value.isInt()) {
+      initVal = value.toInt64();
+    } else {
+      initVal = value.toDouble();
+    }
+    Ndarray* array =
+        new Ndarray(initVal, std::vector<size_t>(shape.begin(), shape.end()));
+    array->setAxisNames(names);
+    return AqlValue(array);
   }
 }
 
@@ -629,19 +696,17 @@ AqlValue functions::MatMul(ExpressionContext* expressionContext, AstNode const&,
                            VPackFunctionParametersView parameters) {
   AqlValue lhs = extractFunctionParameterValue(parameters, 0);
   AqlValue rhs = extractFunctionParameterValue(parameters, 1);
-  if (lhs.canTurnIntoNdarray()) {
-    lhs.turnIntoNdarray();
-  }
-  if (rhs.canTurnIntoNdarray()) {
-    rhs.turnIntoNdarray();
-  }
-  if (!lhs.isNdArray() || !rhs.isNdArray()) {
+  if (!lhs.canTurnIntoNdarray() || !rhs.canTurnIntoNdarray()) {
     // not a Ndarray
     registerWarning(expressionContext, "MatMul",
                     TRI_ERROR_QUERY_ARRAY_EXPECTED);
     return AqlValue(AqlValueHintNull());
   }
-  return AqlValue(Ndop::compute(*(lhs.getNdArray()), *(rhs.getNdArray()),
+  auto leftPtr = lhs.getTurnIntoNdarray();
+  auto rightPtr = rhs.getTurnIntoNdarray();
+
+  return AqlValue(Ndop::compute(*(getNdarrayPtr(leftPtr)),
+                                *(getNdarrayPtr(rightPtr)),
                                 Ndop::BinaryOperator::MATMUL));
 }
 
@@ -650,10 +715,7 @@ AqlValue functions::MatTranspose(ExpressionContext* expressionContext,
                                  VPackFunctionParametersView parameters) {
   AqlValue value = extractFunctionParameterValue(parameters, 0);
   AqlValue axisValue = extractFunctionParameterValue(parameters, 1);
-  if (value.canTurnIntoNdarray()) {
-    value.turnIntoNdarray();
-  }
-  if (!value.isNdArray()) {
+  if (!value.canTurnIntoNdarray()) {
     // not a Ndarray
     registerWarning(expressionContext, "MatTranspose",
                     TRI_ERROR_QUERY_ARRAY_EXPECTED);
@@ -672,8 +734,9 @@ AqlValue functions::MatTranspose(ExpressionContext* expressionContext,
       permutation.push_back(i.getInt());
     }
   }
+  auto ptr = value.getTurnIntoNdarray();
 
-  return AqlValue(Ndop::transpose(value.getNdArray(), permutation));
+  return AqlValue(Ndop::transpose(getNdarrayPtr(ptr), permutation));
 }
 
 AqlValue functions::Reshape(ExpressionContext* expressionContext,
@@ -681,10 +744,7 @@ AqlValue functions::Reshape(ExpressionContext* expressionContext,
                             VPackFunctionParametersView parameters) {
   AqlValue value = extractFunctionParameterValue(parameters, 0);
   AqlValue shapeValue = extractFunctionParameterValue(parameters, 1);
-  if (value.canTurnIntoNdarray()) {
-    value.turnIntoNdarray();
-  }
-  if (!value.isNdArray()) {
+  if (!value.canTurnIntoNdarray()) {
     // not a Ndarray
     registerWarning(expressionContext, "Reshape",
                     TRI_ERROR_QUERY_ARRAY_EXPECTED);
@@ -701,7 +761,8 @@ AqlValue functions::Reshape(ExpressionContext* expressionContext,
   for (auto i : VPackArrayIterator(shapeValue.slice())) {
     shape.push_back(i.getInt());
   }
-  return AqlValue(Ndop::reshape(value.getNdArray(), shape));
+  auto ptr = value.getTurnIntoNdarray();
+  return AqlValue(Ndop::reshape(getNdarrayPtr(ptr), shape));
 }
 
 AqlValue functions::Shape(ExpressionContext* expressionContext, AstNode const&,
@@ -739,16 +800,16 @@ AqlValue functions::Shape(ExpressionContext* expressionContext, AstNode const&,
 AqlValue functions::Inv(ExpressionContext* expressionContext, AstNode const&,
                         VPackFunctionParametersView parameters) {
   AqlValue value = extractFunctionParameterValue(parameters, 0);
-  if (value.canTurnIntoNdarray()) {
-    value.turnIntoNdarray();
-  }
-  if (!value.isNdArray()) {
+
+  if (!value.canTurnIntoNdarray()) {
     // not a Ndarray
     registerWarning(expressionContext, "Reshape",
                     TRI_ERROR_QUERY_ARRAY_EXPECTED);
     return AqlValue(AqlValueHintNull());
   }
-  return AqlValue(Ndop::inv(value.getNdArray()));
+
+  auto ptr = value.getTurnIntoNdarray();
+  return AqlValue(Ndop::inv(getNdarrayPtr(ptr)));
 }
 
 AqlValue functions::Dimension(ExpressionContext* expressionContext,
@@ -787,10 +848,7 @@ AqlValue functions::NdarraySum(
   AqlValue value = extractFunctionParameterValue(parameters, 0);
   AqlValue axisValue = extractFunctionParameterValue(parameters, 1);
 
-  if (value.canTurnIntoNdarray()) {
-    value.turnIntoNdarray();
-  }
-  if (!value.isNdArray()) {
+  if (!value.canTurnIntoNdarray()) {
     // not a Ndarray
     registerWarning(expressionContext, "NdarraySum",
                     TRI_ERROR_QUERY_ARRAY_EXPECTED);
@@ -817,7 +875,8 @@ AqlValue functions::NdarraySum(
   } else if (axisValue.isInt()) {
     axis.push_back(axisValue.toInt64());
   }
-  return AqlValue(Ndop::aggCompute(value.getNdArray(),
+  auto ptr = value.getTurnIntoNdarray();
+  return AqlValue(Ndop::aggCompute(getNdarrayPtr(ptr),
                                    arangodb::aql::NdarrayOperator::SUM, axis));
 }
 
@@ -827,10 +886,7 @@ AqlValue functions::NdarrayCountNonZero(
   AqlValue value = extractFunctionParameterValue(parameters, 0);
   AqlValue axisValue = extractFunctionParameterValue(parameters, 1);
 
-  if (value.canTurnIntoNdarray()) {
-    value.turnIntoNdarray();
-  }
-  if (!value.isNdArray()) {
+  if (!value.canTurnIntoNdarray()) {
     // not a Ndarray
     registerWarning(expressionContext, "NdarraySum",
                     TRI_ERROR_QUERY_ARRAY_EXPECTED);
@@ -857,7 +913,22 @@ AqlValue functions::NdarrayCountNonZero(
   } else if (axisValue.isInt()) {
     axis.push_back(axisValue.toInt64());
   }
+  auto ptr = value.getTurnIntoNdarray();
   return AqlValue(
-      Ndop::aggCompute(value.getNdArray(),
+      Ndop::aggCompute(getNdarrayPtr(ptr),
                        arangodb::aql::NdarrayOperator::COUNT_NON_ZERO, axis));
+}
+
+AqlValue functions::NdarrayView(
+    arangodb::aql::ExpressionContext* expressionContext, AstNode const&,
+    VPackFunctionParametersView parameters) {
+  AqlValue value = extractFunctionParameterValue(parameters, 0);
+  if (!value.canTurnIntoNdarray()) {
+    registerWarning(expressionContext, "NdarrayView",
+                    TRI_ERROR_QUERY_ARRAY_EXPECTED);
+    return AqlValue(AqlValueHintNull());
+  }
+  auto ptr = value.getTurnIntoNdarray();
+
+  return AqlValue(getNdarrayPtr(ptr)->clone());
 }

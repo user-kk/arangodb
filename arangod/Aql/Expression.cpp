@@ -671,39 +671,20 @@ AqlValue Expression::executeSimpleExpressionIndexedAccess(
       }
       // no number found.
     }
-
-    // fall-through to returning null
-  } else if (result.isObject()) {
+  } else if (
+      result
+          .canTurnIntoNdarray()) {  //!!
+                                    //! 必须先检测是否为NdarrayVpack后检测是否为object
+                                    //! 因为是vpack同时必是object
+    auto ptr = result.getTurnIntoNdarray();
+    Ndarray* resultNdarray = getNdarrayPtr(ptr);
     AqlValue indexResult =
         executeSimpleExpression(ctx, index, mustDestroy, false);
 
     AqlValueGuard guardIdx(indexResult, mustDestroy);
 
-    if (indexResult.isNumber()) {
-      std::string const indexString = std::to_string(indexResult.toInt64());
-      auto* resolver = ctx.trx().resolver();
-      TRI_ASSERT(resolver != nullptr);
-      return result.get(*resolver, indexString, mustDestroy, true);
-    }
-
-    if (indexResult.isString()) {
-      VPackValueLength l;
-      char const* p = indexResult.slice().getStringUnchecked(l);
-      auto* resolver = ctx.trx().resolver();
-      TRI_ASSERT(resolver != nullptr);
-      return result.get(*resolver, std::string_view(p, l), mustDestroy, true);
-    }
-
-    // fall-through to returning null
-  } else if (result.canTurnIntoNdarray()) {
-    result.turnIntoNdarray();
-    AqlValue indexResult =
-        executeSimpleExpression(ctx, index, mustDestroy, false);
-
-    AqlValueGuard guardIdx(indexResult, mustDestroy);
-
-    size_t dimension = result.getNdArray()->dimension();
-    auto shape = result.getNdArray()->shape();
+    size_t dimension = resultNdarray->dimension();
+    auto shape = resultNdarray->shape();
 
     xt::xstrided_slice_vector stridedSliceVector;
     if (indexResult.isInt()) {
@@ -748,7 +729,7 @@ AqlValue Expression::executeSimpleExpressionIndexedAccess(
         int n = 0;
         for (auto i : VPackArrayIterator(indexResult.slice())) {
           std::string name = i["axis"].toString();
-          int asixIndex = result.getNdArray()->axisIndexFromName(name);
+          int asixIndex = resultNdarray->axisIndexFromName(name);
           if (asixIndex == -1) {
             ctx.registerError(TRI_ERROR_QUERY_PARSE, "This axis doesn't exist");
             return AqlValue(AqlValueHintNull());
@@ -795,6 +776,14 @@ AqlValue Expression::executeSimpleExpressionIndexedAccess(
           n++;
         }
       }
+    } else if (indexResult.canTurnIntoNdarray()) {
+      auto ptr = indexResult.getTurnIntoNdarray();
+      if (resultNdarray->shape() != getNdarrayPtr(ptr)->shape()) {
+        ctx.registerError(TRI_ERROR_QUERY_PARSE, "shape is different");
+        return AqlValue(AqlValueHintNull());
+      }
+      mustDestroy = true;
+      return AqlValue(resultNdarray->filter(getNdarrayPtr(ptr)));
     } else if (indexResult.isObject()) {
       if (dimension != 1) {
         ctx.registerError(TRI_ERROR_QUERY_PARSE, "index dimension error");
@@ -814,23 +803,40 @@ AqlValue Expression::executeSimpleExpressionIndexedAccess(
         ctx.registerError(TRI_ERROR_QUERY_PARSE, "name index format error");
         return AqlValue(AqlValueHintNull());
       }
-    } else if (indexResult.isNdArray()) {
-      if (result.getNdArray()->shape() != indexResult.getNdArray()->shape()) {
-        ctx.registerError(TRI_ERROR_QUERY_PARSE, "shape is different");
-        return AqlValue(AqlValueHintNull());
-      }
-      return AqlValue(result.getNdArray()->filter(indexResult.getNdArray()));
     } else {
       ctx.registerError(TRI_ERROR_QUERY_PARSE, "range index format error");
       return AqlValue(AqlValueHintNull());
     }
-    Ndarray* ndarray = Ndop::slice(result.getNdArray(), stridedSliceVector);
+    Ndarray* ndarray = Ndop::slice(resultNdarray, stridedSliceVector);
     if (ndarray->empty()) {
       delete ndarray;
       ctx.registerError(TRI_ERROR_QUERY_PARSE, "out of range");
       return AqlValue(AqlValueHintNull());
     }
+    mustDestroy = true;
     return AqlValue(ndarray);
+  } else if (result.isObject()) {
+    AqlValue indexResult =
+        executeSimpleExpression(ctx, index, mustDestroy, false);
+
+    AqlValueGuard guardIdx(indexResult, mustDestroy);
+
+    if (indexResult.isNumber()) {
+      std::string const indexString = std::to_string(indexResult.toInt64());
+      auto* resolver = ctx.trx().resolver();
+      TRI_ASSERT(resolver != nullptr);
+      return result.get(*resolver, indexString, mustDestroy, true);
+    }
+
+    if (indexResult.isString()) {
+      VPackValueLength l;
+      char const* p = indexResult.slice().getStringUnchecked(l);
+      auto* resolver = ctx.trx().resolver();
+      TRI_ASSERT(resolver != nullptr);
+      return result.get(*resolver, std::string_view(p, l), mustDestroy, true);
+    }
+
+    // fall-through to returning null
   }
 
   return AqlValue(AqlValueHintNull());
@@ -1368,8 +1374,9 @@ AqlValue Expression::executeSimpleExpressionNot(ExpressionContext& ctx,
 
   AqlValueGuard guard(operand, mustDestroy);
   if (operand.canTurnIntoNdarray()) {
-    operand.turnIntoNdarray();
-    return AqlValue(Ndop::getNot(operand.getNdArray()));
+    auto ptr = operand.getTurnIntoNdarray();
+    mustDestroy = true;
+    return AqlValue(Ndop::getNot(getNdarrayPtr(ptr)));
   }
   bool const operandIsTrue = operand.toBoolean();
 
@@ -1388,17 +1395,9 @@ AqlValue Expression::executeSimpleExpressionPlus(ExpressionContext& ctx,
   AqlValueGuard guard(operand, mustDestroy);
 
   if (operand.canTurnIntoNdarray()) {
-    operand.turnIntoNdarray();
-    if (operand.getNdArray()->getValueType() == Ndarray::INT_TYPE) {
-      return AqlValue(
-          Ndarray::fromOtherNdarray<int>(operand.getNdArray(), {}, {}));
-    } else if (operand.getNdArray()->getValueType() == Ndarray::DOUBLE_TYPE) {
-      return AqlValue(
-          Ndarray::fromOtherNdarray<double>(operand.getNdArray(), {}, {}));
-    } else {
-      return AqlValue(
-          Ndarray::fromOtherNdarray<float>(operand.getNdArray(), {}, {}));
-    }
+    auto ptr = operand.getTurnIntoNdarray();
+    mustDestroy = true;
+    return AqlValue(getNdarrayPtr(ptr)->clone());
   }
 
   if (operand.isNumber()) {
@@ -1435,8 +1434,9 @@ AqlValue Expression::executeSimpleExpressionMinus(ExpressionContext& ctx,
 
   AqlValueGuard guard(operand, mustDestroy);
   if (operand.canTurnIntoNdarray()) {
-    operand.turnIntoNdarray();
-    return AqlValue(Ndop::getNegative(operand.getNdArray()));
+    auto ptr = operand.getTurnIntoNdarray();
+    mustDestroy = true;
+    return AqlValue(Ndop::getNegative(getNdarrayPtr(ptr)));
   }
 
   if (operand.isNumber()) {
@@ -1479,14 +1479,15 @@ AqlValue Expression::executeSimpleExpressionAnd(ExpressionContext& ctx,
                                           mustDestroy, true);
 
   if (left.canTurnIntoNdarray()) {  // and 和 or 只允许Ndarray之间,不允许标量
-    left.turnIntoNdarray();
+    auto ptrLeft = left.getTurnIntoNdarray();
     AqlValue right = executeSimpleExpression(ctx, node->getMemberUnchecked(1),
                                              mustDestroy, true);
     AqlValueGuard guardRight(right, mustDestroy);
     if (right.canTurnIntoNdarray()) {
-      right.turnIntoNdarray();
-      return AqlValue(Ndop::CompareCompute(*left.getNdArray(),
-                                           *right.getNdArray(), Ndop::AND));
+      auto ptrRight = left.getTurnIntoNdarray();
+      mustDestroy = true;
+      return AqlValue(Ndop::CompareCompute(
+          *getNdarrayPtr(ptrLeft), *getNdarrayPtr(ptrRight), Ndop::AND));
     } else {
       THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
                                      "This type is not allowed");
@@ -1514,14 +1515,15 @@ AqlValue Expression::executeSimpleExpressionOr(ExpressionContext& ctx,
                                           mustDestroy, true);
 
   if (left.canTurnIntoNdarray()) {  // and 和 or 只允许Ndarray之间,不允许标量
-    left.turnIntoNdarray();
+    auto ptrLeft = left.getTurnIntoNdarray();
     AqlValue right = executeSimpleExpression(ctx, node->getMemberUnchecked(1),
                                              mustDestroy, true);
     AqlValueGuard guardRight(right, mustDestroy);
     if (right.canTurnIntoNdarray()) {
-      right.turnIntoNdarray();
-      return AqlValue(Ndop::CompareCompute(*left.getNdArray(),
-                                           *right.getNdArray(), Ndop::OR));
+      auto ptrRight = right.getTurnIntoNdarray();
+      mustDestroy = true;
+      return AqlValue(Ndop::CompareCompute(*getNdarrayPtr(ptrLeft),
+                                           *getNdarrayPtr(ptrRight), Ndop::OR));
     } else {
       THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
                                      "This type is not allowed");
@@ -1632,13 +1634,6 @@ AqlValue Expression::executeSimpleExpressionComparison(ExpressionContext& ctx,
 
   // all other comparison operators...
 
-  if (left.canTurnIntoNdarray()) {
-    left.turnIntoNdarray();
-  }
-  if (right.canTurnIntoNdarray()) {
-    right.turnIntoNdarray();
-  }
-
   // 如果是Ndarray时,要使用这个CompareOperator
   Ndop::CompareOperator op;
   switch (node->type) {
@@ -1667,27 +1662,35 @@ AqlValue Expression::executeSimpleExpressionComparison(ExpressionContext& ctx,
       THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_INTERNAL, msg);
   }
 
-  if (left.isNdArray() && right.isNdArray()) {
-    return AqlValue(
-        Ndop::CompareCompute(*left.getNdArray(), *right.getNdArray(), op));
-  } else if (left.isNdArray()) {
+  if (left.canTurnIntoNdarray() && right.canTurnIntoNdarray()) {
+    auto leftPtr = left.getTurnIntoNdarray();
+    auto rightPtr = right.getTurnIntoNdarray();
+
+    mustDestroy = true;
+    return AqlValue(Ndop::CompareCompute(*getNdarrayPtr(leftPtr),
+                                         *getNdarrayPtr(rightPtr), op));
+  } else if (left.canTurnIntoNdarray()) {
+    auto leftPtr = left.getTurnIntoNdarray();
+    mustDestroy = true;
     if (right.isInt()) {
       return AqlValue(Ndop::CompareCompute(
-          *left.getNdArray(), static_cast<int>(right.toInt64()), op));
+          *getNdarrayPtr(leftPtr), static_cast<int>(right.toInt64()), op));
     } else if (right.isfloatOrDouble()) {
       return AqlValue(
-          Ndop::CompareCompute(*left.getNdArray(), right.toDouble(), op));
+          Ndop::CompareCompute(*getNdarrayPtr(leftPtr), right.toDouble(), op));
     } else {
       THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
                                      "This type is not allowed");
     }
-  } else if (right.isNdArray()) {
+  } else if (right.canTurnIntoNdarray()) {
+    auto rightPtr = right.getTurnIntoNdarray();
+    mustDestroy = true;
     if (left.isInt()) {
       return AqlValue(Ndop::CompareCompute(static_cast<int>(left.toInt64()),
-                                           *right.getNdArray(), op));
+                                           *getNdarrayPtr(rightPtr), op));
     } else if (left.isfloatOrDouble()) {
       return AqlValue(
-          Ndop::CompareCompute(left.toDouble(), *right.getNdArray(), op));
+          Ndop::CompareCompute(left.toDouble(), *getNdarrayPtr(rightPtr), op));
     } else {
       THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
                                      "This type is not allowed");
@@ -2240,14 +2243,9 @@ AqlValue Expression::executeSimpleExpressionArithmetic(ExpressionContext& ctx,
                                          mustDestroy, true);
   AqlValueGuard guardRhs(rhs, mustDestroy);
 
-  if (lhs.canTurnIntoNdarray()) {
-    lhs.turnIntoNdarray();
-  }
-  if (rhs.canTurnIntoNdarray()) {
-    rhs.turnIntoNdarray();
-  }
-
-  if (lhs.isNdArray() && rhs.isNdArray()) {  // 都是ndarray
+  if (lhs.canTurnIntoNdarray() && rhs.canTurnIntoNdarray()) {  // 都是ndarray
+    auto leftPtr = lhs.getTurnIntoNdarray();
+    auto rightPtr = rhs.getTurnIntoNdarray();
     Ndop::BinaryOperator op;
     switch (node->type) {
       case NODE_TYPE_OPERATOR_BINARY_PLUS:
@@ -2268,10 +2266,10 @@ AqlValue Expression::executeSimpleExpressionArithmetic(ExpressionContext& ctx,
       default:
         return AqlValue(AqlValueHintDouble(0.0));
     }
-    return AqlValue(
-        Ndop::compute(*(lhs.getNdArray()), *(rhs.getNdArray()), op));
+    return AqlValue(Ndop::compute(*(getNdarrayPtr(leftPtr)),
+                                  *(getNdarrayPtr(rightPtr)), op));
   }
-  if (lhs.isNdArray() || rhs.isNdArray()) {  // 有一个是ndarry
+  if (lhs.canTurnIntoNdarray() || rhs.canTurnIntoNdarray()) {  // 有一个是ndarry
     Ndop::BinaryOperator op;
     switch (node->type) {
       case NODE_TYPE_OPERATOR_BINARY_PLUS:
@@ -2292,23 +2290,29 @@ AqlValue Expression::executeSimpleExpressionArithmetic(ExpressionContext& ctx,
       default:
         return AqlValue(AqlValueHintDouble(0.0));
     }
-    if (lhs.isNdArray()) {
+    if (lhs.canTurnIntoNdarray()) {
+      auto leftPtr = lhs.getTurnIntoNdarray();
+      mustDestroy = true;
       if (rhs.isInt()) {
-        return AqlValue(Ndop::compute(*(lhs.getNdArray()),
+        return AqlValue(Ndop::compute(*(getNdarrayPtr(leftPtr)),
                                       static_cast<int>(rhs.toInt64()), op));
       } else if (rhs.isfloatOrDouble()) {
-        return AqlValue(Ndop::compute(*(lhs.getNdArray()), rhs.toDouble(), op));
+        return AqlValue(
+            Ndop::compute(*(getNdarrayPtr(leftPtr)), rhs.toDouble(), op));
       } else {
         ctx.registerError(TRI_ERROR_QUERY_PARSE,
                           "ndarry calculations with the wrong type ");
         return AqlValue(AqlValueHintNull());
       }
     } else {
+      auto rightPtr = rhs.getTurnIntoNdarray();
+      mustDestroy = true;
       if (lhs.isInt()) {
         return AqlValue(Ndop::compute(static_cast<int>(lhs.toInt64()),
-                                      *(rhs.getNdArray()), op));
+                                      *(getNdarrayPtr(rightPtr)), op));
       } else if (lhs.isfloatOrDouble()) {
-        return AqlValue(Ndop::compute(lhs.toDouble(), *(rhs.getNdArray()), op));
+        return AqlValue(
+            Ndop::compute(lhs.toDouble(), *(getNdarrayPtr(rightPtr)), op));
       } else {
         ctx.registerError(TRI_ERROR_QUERY_PARSE,
                           "ndarry calculations with the wrong type ");

@@ -28,6 +28,7 @@
 #include "Aql/Functions.h"
 #include "Aql/Ndarray.hpp"
 #include "Aql/Parser.h"
+#include "Assertions/Assert.h"
 #include "Basics/Exceptions.h"
 #include "Containers/FlatHashSet.h"
 #include "Basics/VelocyPackHelper.h"
@@ -702,11 +703,10 @@ struct AggregatorToNdArrayf final : public AggregatorNeedDynamicMemory {
     }
     float val = extractFunctionParameterValue(parameters, parameters.size() - 1)
                     .toDouble();
-    datas->set(indice, val);
+    datas->get<float>()[indice] = val;
   }
 
   AqlValue get() const override {
-    auto shape = datas->shape();
     Ndarray* p = datas.release();
     return AqlValue(p);
   }
@@ -797,11 +797,10 @@ struct AggregatorToNdArrayd final : public AggregatorNeedDynamicMemory {
     double val =
         extractFunctionParameterValue(parameters, parameters.size() - 1)
             .toDouble();
-    datas->set(indice, val);
+    datas->get<double>()[indice] = val;
   }
 
   AqlValue get() const override {
-    auto shape = datas->shape();
     Ndarray* p = datas.release();
     return AqlValue(p);
   }
@@ -891,11 +890,10 @@ struct AggregatorToNdArrayi final : public AggregatorNeedDynamicMemory {
     }
     int val = extractFunctionParameterValue(parameters, parameters.size() - 1)
                   .toInt64();
-    datas->set(indice, val);
+    datas->get<int>()[indice] = val;
   }
 
   AqlValue get() const override {
-    auto shape = datas->shape();
     Ndarray* p = datas.release();
     return AqlValue(p);
   }

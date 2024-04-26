@@ -337,6 +337,8 @@ AqlValue Inv(arangodb::aql::ExpressionContext*, AstNode const&,
              VPackFunctionParametersView);
 AqlValue DocumentView(arangodb::aql::ExpressionContext*, AstNode const&,
                       VPackFunctionParametersView);
+AqlValue NdarrayView(arangodb::aql::ExpressionContext*, AstNode const&,
+                     VPackFunctionParametersView);
 AqlValue NdarraySum(arangodb::aql::ExpressionContext*, AstNode const&,
                     VPackFunctionParametersView);
 AqlValue NdarrayCountNonZero(arangodb::aql::ExpressionContext*, AstNode const&,

@@ -917,6 +917,8 @@ AqlValue AqlValue::clone() const {
                       _data.managedStringMeta.getLength()};
     case RANGE:
       return AqlValue{range()->_low, range()->_high};
+    case NDARRAY:
+      return AqlValue(_data.ndArrayMeta.pointer->clone());
     default:
       break;
   }

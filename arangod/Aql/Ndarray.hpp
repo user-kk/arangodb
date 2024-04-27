@@ -51,6 +51,7 @@ class Ndarray {
 
   Ndarray() = default;
   Ndarray(const Ndarray& array) : _type(array._type), _data(array._data) {}
+  ~Ndarray() = default;
 
   template<typename T>
     requires is_one_of<T, int, double, float>::value

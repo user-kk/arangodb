@@ -1476,12 +1476,12 @@ AqlValue Expression::executeSimpleExpressionAnd(ExpressionContext& ctx,
                                                 AstNode const* node,
                                                 bool& mustDestroy) {
   AqlValue left = executeSimpleExpression(ctx, node->getMemberUnchecked(0),
-                                          mustDestroy, true);
+                                          mustDestroy, false);
 
   if (left.canTurnIntoNdarray()) {  // and 和 or 只允许Ndarray之间,不允许标量
     auto ptrLeft = left.getTurnIntoNdarray();
     AqlValue right = executeSimpleExpression(ctx, node->getMemberUnchecked(1),
-                                             mustDestroy, true);
+                                             mustDestroy, false);
     AqlValueGuard guardRight(right, mustDestroy);
     if (right.canTurnIntoNdarray()) {
       auto ptrRight = left.getTurnIntoNdarray();
@@ -1512,12 +1512,12 @@ AqlValue Expression::executeSimpleExpressionOr(ExpressionContext& ctx,
                                                AstNode const* node,
                                                bool& mustDestroy) {
   AqlValue left = executeSimpleExpression(ctx, node->getMemberUnchecked(0),
-                                          mustDestroy, true);
+                                          mustDestroy, false);
 
   if (left.canTurnIntoNdarray()) {  // and 和 or 只允许Ndarray之间,不允许标量
     auto ptrLeft = left.getTurnIntoNdarray();
     AqlValue right = executeSimpleExpression(ctx, node->getMemberUnchecked(1),
-                                             mustDestroy, true);
+                                             mustDestroy, false);
     AqlValueGuard guardRight(right, mustDestroy);
     if (right.canTurnIntoNdarray()) {
       auto ptrRight = right.getTurnIntoNdarray();
@@ -2236,11 +2236,11 @@ AqlValue Expression::executeSimpleExpressionArithmetic(ExpressionContext& ctx,
                                                        AstNode const* node,
                                                        bool& mustDestroy) {
   AqlValue lhs = executeSimpleExpression(ctx, node->getMemberUnchecked(0),
-                                         mustDestroy, true);
+                                         mustDestroy, false);
   AqlValueGuard guardLhs(lhs, mustDestroy);
 
   AqlValue rhs = executeSimpleExpression(ctx, node->getMemberUnchecked(1),
-                                         mustDestroy, true);
+                                         mustDestroy, false);
   AqlValueGuard guardRhs(rhs, mustDestroy);
 
   if (lhs.canTurnIntoNdarray() && rhs.canTurnIntoNdarray()) {  // 都是ndarray
@@ -2266,6 +2266,7 @@ AqlValue Expression::executeSimpleExpressionArithmetic(ExpressionContext& ctx,
       default:
         return AqlValue(AqlValueHintDouble(0.0));
     }
+    mustDestroy = true;
     return AqlValue(Ndop::compute(*(getNdarrayPtr(leftPtr)),
                                   *(getNdarrayPtr(rightPtr)), op));
   }

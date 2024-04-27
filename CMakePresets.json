@@ -339,7 +339,7 @@
     {
       "name": "mybuildTsan",
       "inherits": [
-        "community-developer"
+        "mybuild"
       ],
       "cacheVariables": {
         "USE_JEMALLOC": "Off",

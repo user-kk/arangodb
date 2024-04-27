@@ -2,6 +2,7 @@
 #include "Aql/Ndarray.hpp"
 #include "Aql/NdarrayOperator.hpp"
 #include "Functions.h"
+#include <atomic>
 #include <cassert>
 #include <cstddef>
 #include <set>
@@ -931,4 +932,19 @@ AqlValue functions::NdarrayView(
   auto ptr = value.getTurnIntoNdarray();
 
   return AqlValue(getNdarrayPtr(ptr)->clone());
+}
+
+namespace {
+std::atomic<size_t> count = 0;
+std::atomic<void*> current = nullptr;
+}  // namespace
+
+AqlValue functions::RowNumber(
+    arangodb::aql::ExpressionContext* expressionContext, AstNode const& node,
+    VPackFunctionParametersView parameters) {
+  if (current.load() != &node) {
+    current.store((void*)&node);
+    count = 0;
+  }
+  return AqlValue(AqlValueHintUInt(count++));
 }

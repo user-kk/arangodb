@@ -345,6 +345,9 @@ AqlValue NdarrayCountNonZero(arangodb::aql::ExpressionContext*, AstNode const&,
                              VPackFunctionParametersView);
 AqlValue NdarrayWhere(arangodb::aql::ExpressionContext*, AstNode const&,
                       VPackFunctionParametersView);
+AqlValue RowNumber(arangodb::aql::ExpressionContext*, AstNode const&,
+                   VPackFunctionParametersView);
+
 AqlValue Sum(arangodb::aql::ExpressionContext*, AstNode const&,
              VPackFunctionParametersView);
 AqlValue Average(arangodb::aql::ExpressionContext*, AstNode const&,

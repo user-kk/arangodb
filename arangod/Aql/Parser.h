@@ -25,6 +25,7 @@
 
 #include <cstddef>
 #include <deque>
+#include <memory>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
@@ -34,7 +35,6 @@
 #include "Aql/QueryContext.h"
 #include "Aql/Variable.h"
 #include "Assertions/Assert.h"
-#include "Basics/Common.h"
 
 namespace arangodb {
 namespace aql {
@@ -283,6 +283,62 @@ class Parser {
   void processHaving();
   ///@brief 将order_by中的group_by变量替换
   void processOrderBy(AstNode* arrayNode);
+
+  struct SQLGraphInfo {
+    AstNode* varNodes = nullptr;
+    AstNode* directionNode = nullptr;
+    AstNode* startNode = nullptr;
+    AstNode* collectionNode = nullptr;
+  };
+
+  std::unique_ptr<SQLGraphInfo> sqlGraphInfo;
+
+  void beginGraph() { sqlGraphInfo = std::make_unique<SQLGraphInfo>(); }
+
+  void setGraphVarNodes(AstNode* p1, AstNode* e, AstNode* p2) {
+    sqlGraphInfo->startNode = p1;
+    AstNode* array = _ast.createNodeArray();
+    AstNode* p2Var = _ast.createNodeVariable(p2->getStringView(), true);
+    array->members.push_back(p2Var);
+
+    if (e->type != NODE_TYPE_NOP) {
+      AstNode* eVar = _ast.createNodeVariable(e->getStringView(), true);
+      array->members.push_back(eVar);
+    }
+    sqlGraphInfo->varNodes = array;
+  }
+
+  AstNode* buildNodeTraversal() {
+    auto infoNode = _ast.createNodeArray();
+    infoNode->addMember(sqlGraphInfo->directionNode);
+    infoNode->addMember(sqlGraphInfo->startNode);
+    infoNode->addMember(sqlGraphInfo->collectionNode);
+    infoNode->addMember(_ast.createNodeNop());
+    infoNode->addMember(_ast.createNodeNop());
+
+    return _ast.createNodeTraversal(sqlGraphInfo->varNodes, infoNode);
+  }
+
+  AstNode* buildNodeDirection(int direction, AstNode* step) {
+    if (step->type == NODE_TYPE_NOP) {
+      return _ast.createNodeDirection(direction, 1);
+    }
+    TRI_ASSERT(step->type == NODE_TYPE_RANGE);
+    return _ast.createNodeDirection(direction, step);
+  }
+
+  bool updateStartNode(AstNode* expression, std::string_view startNodeName) {
+    if (sqlGraphInfo == nullptr) {
+      return false;
+    }
+
+    if (sqlGraphInfo->startNode->getString() != startNodeName) {
+      return false;
+    }
+
+    *(sqlGraphInfo->startNode) = *expression;
+    return true;
+  }
 
  private:
   struct SQLContext;

@@ -478,6 +478,8 @@ AstNode* transformOutputVariables(Parser* parser, AstNode const* names) {
 %token T_DOLLAR "$"
 %token T_JOIN "join"
 %token T_ON "on"
+%token T_MATCH "match"
+%token T_START_AS "start_as"
 
 
 
@@ -587,6 +589,9 @@ AstNode* transformOutputVariables(Parser* parser, AstNode const* names) {
 %type <node> expression_or_none;
 %type <node> interval_element;
 %type <node> range_index;
+%type <node> point;
+%type <node> edge;
+%type <node> step;
 
 
 /* define start token of language */
@@ -2635,6 +2640,12 @@ collection_element:
       auto node = parser->ast()->createNodeFilter($5);
       parser->ast()->addOperation(node);
     }
+  | collection_pair T_JOIN collection_pair T_ON expression T_START_AS variable_name {
+     bool success= parser->updateStartNode($5,std::string_view{$7.value, $7.length});
+     if(!success){
+      parser->registerParseError(TRI_ERROR_QUERY_PARSE, "start_as error", yylloc.first_line, yylloc.first_column);
+     }
+    }
 ;
 
 collection_pair:
@@ -2688,7 +2699,71 @@ collection_pair:
     } unnest_statement {
 
     }
+  | T_STRING {parser->beginGraph(); } T_MATCH graph_info {
+
+    parser->ast()->scopes()->start(arangodb::aql::AQL_SCOPE_FOR);
+
+    auto node = parser->ast()->createNodeArray();
+    node->addMember(parser->ast()->createNodeValueString($1.value, $1.length));
+    auto const& resolver = parser->query().resolver();
+    auto collectionNode = parser->ast()->createNodeCollectionList(node, resolver);
+    parser->sqlGraphInfo->collectionNode=collectionNode;
+    auto traversalNode=parser->buildNodeTraversal();
+    parser->ast()->addOperation(traversalNode);
+
+
+  } 
   ;
+graph_info:
+    point T_MINUS edge T_MINUS T_GT step point{
+      //默认步长为1
+      auto& info=parser->sqlGraphInfo;
+      info->directionNode=parser->buildNodeDirection(2, $6);//OUTBOUND
+      parser->setGraphVarNodes($1,$3,$7);
+      
+
+    }
+  | point T_LT T_MINUS edge T_MINUS step point{
+      auto& info=parser->sqlGraphInfo;
+      info->directionNode=parser->buildNodeDirection(1, $6);//INBOUND
+      parser->setGraphVarNodes($1,$4,$7);
+
+    }
+  | point T_MINUS edge T_MINUS step point  {
+      auto& info=parser->sqlGraphInfo;
+      info->directionNode=parser->buildNodeDirection(0, $5);//any
+      parser->setGraphVarNodes($1,$3,$6);
+
+    }
+  ;
+point:
+  T_OPEN variable_name T_CLOSE {
+    AstNode* node = parser->ast()->createNodeValueString($2.value, $2.length);
+    $$=node;
+
+  }
+  ;
+edge:
+    T_ARRAY_OPEN variable_name T_ARRAY_CLOSE{
+      AstNode* node = parser->ast()->createNodeValueString($2.value, $2.length);
+      $$=node;
+
+    }
+  | T_ARRAY_OPEN T_ARRAY_CLOSE {
+      AstNode* node = parser->ast()->createNodeNop();
+      $$=node;
+    }
+  ;
+step:
+    /*empty*/{
+      $$=parser->ast()->createNodeNop();
+    }
+  | T_OBJECT_OPEN expression T_COMMA expression T_OBJECT_CLOSE {
+      $$=parser->ast()->createNodeRange($2, $4);
+
+    }
+  ;
+
 unnest_statement:
     /*empty*/{
 

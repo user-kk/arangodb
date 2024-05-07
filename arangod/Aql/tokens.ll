@@ -265,6 +265,14 @@ class Parser;
   return T_UNNEST_ALL;
 }
 
+(?i:MATCH) {
+  return T_MATCH;
+}
+
+(?i:START_AS) {
+  return T_START_AS;
+}
+
  /* ---------------------------------------------------------------------------
   * predefined type literals
   * --------------------------------------------------------------------------- */

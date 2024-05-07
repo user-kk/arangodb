@@ -654,6 +654,9 @@ void AqlFunctionFeature::addNdArrayFunctions() {
        &functions::NdarrayWhere});
   add({"NDARRAY_VIEW", ".", Function::makeFlags(), &functions::NdarrayView});
   add({"ROW_NUMBER", "", Function::makeFlags(), &functions::RowNumber});
+  add({"DENSE_RANK", ".", Function::makeFlags(), &functions::DenseRank});
+  add({"NORM2", ".", Function::makeFlags(), &functions::Norm2});
+  add({"NORMALIZATION", ".", Function::makeFlags(), &functions::Normalization});
 };
 }  // namespace aql
 }  // namespace arangodb

@@ -701,9 +701,29 @@ struct AggregatorToNdArrayf final : public AggregatorNeedDynamicMemory {
       }
       indice.push_back(static_cast<size_t>(index));
     }
-    float val = extractFunctionParameterValue(parameters, parameters.size() - 1)
-                    .toDouble();
-    datas->get<float>()[indice] = val;
+    auto& param =
+        extractFunctionParameterValue(parameters, parameters.size() - 1);
+    if (param.isInt()) {
+      datas->get<float>()[indice] = static_cast<float>(param.toInt64());
+      return;
+    } else if (param.isfloatOrDouble()) {
+      datas->get<float>()[indice] = static_cast<float>(param.toDouble());
+    } else if (param.canTurnIntoNdarray()) {
+      auto array = param.getTurnIntoNdarray();
+      auto arrayPtr = getNdarrayPtr(array);
+      if (arrayPtr->getValueType() == arangodb::aql::Ndarray::INT_TYPE) {
+        datas->get<float>()[indice] =
+            static_cast<float>(arrayPtr->get<int>()[{}]);
+      } else if (arrayPtr->getValueType() ==
+                 arangodb::aql::Ndarray::FLOAT_TYPE) {
+        datas->get<float>()[indice] =
+            static_cast<float>(arrayPtr->get<float>()[{}]);
+      } else if (arrayPtr->getValueType() ==
+                 arangodb::aql::Ndarray::DOUBLE_TYPE) {
+        datas->get<float>()[indice] =
+            static_cast<float>(arrayPtr->get<double>()[{}]);
+      }
+    }
   }
 
   AqlValue get() const override {
@@ -740,7 +760,11 @@ struct AggregatorToNdArrayf final : public AggregatorNeedDynamicMemory {
     for (auto const& i : arangodb::velocypack::ArrayIterator(infoSlice)) {
       int length = 0;
       try {
-        length = i["length"].getInt();
+        if (i["length"].isDouble()) {
+          length = i["length"].getDouble();
+        } else {
+          length = i["length"].getInt();
+        }
         if (i.hasKey("axis") && i["axis"].isString()) {
           axisNames.push_back(i["axis"].copyString());
         } else {
@@ -794,10 +818,25 @@ struct AggregatorToNdArrayd final : public AggregatorNeedDynamicMemory {
       }
       indice.push_back(static_cast<size_t>(index));
     }
-    double val =
-        extractFunctionParameterValue(parameters, parameters.size() - 1)
-            .toDouble();
-    datas->get<double>()[indice] = val;
+    auto& param =
+        extractFunctionParameterValue(parameters, parameters.size() - 1);
+    if (param.isInt()) {
+      datas->get<double>()[indice] = (float)param.toInt64();
+      return;
+    } else if (param.isfloatOrDouble()) {
+      datas->get<double>()[indice] = (float)param.toDouble();
+    } else if (param.canTurnIntoNdarray()) {
+      auto array = param.getTurnIntoNdarray();
+      auto arrayPtr = getNdarrayPtr(array);
+      if (arrayPtr->getValueType() == arangodb::aql::Ndarray::INT_TYPE) {
+        datas->get<double>()[indice] = (double)arrayPtr->get<int>()[{}];
+      } else if (arrayPtr->getValueType() ==
+                 arangodb::aql::Ndarray::FLOAT_TYPE) {
+        datas->get<double>()[indice] = (double)arrayPtr->get<float>()[{}];
+      } else {
+        datas->get<double>()[indice] = (double)arrayPtr->get<double>()[{}];
+      }
+    }
   }
 
   AqlValue get() const override {
@@ -834,7 +873,11 @@ struct AggregatorToNdArrayd final : public AggregatorNeedDynamicMemory {
     for (auto const& i : arangodb::velocypack::ArrayIterator(infoSlice)) {
       int length = 0;
       try {
-        length = i["length"].getInt();
+        if (i["length"].isDouble()) {
+          length = i["length"].getDouble();
+        } else {
+          length = i["length"].getInt();
+        }
         if (i.hasKey("axis") && i["axis"].isString()) {
           axisNames.push_back(i["axis"].copyString());
         } else {
@@ -888,9 +931,25 @@ struct AggregatorToNdArrayi final : public AggregatorNeedDynamicMemory {
       }
       indice.push_back(static_cast<size_t>(index));
     }
-    int val = extractFunctionParameterValue(parameters, parameters.size() - 1)
-                  .toInt64();
-    datas->get<int>()[indice] = val;
+    auto& param =
+        extractFunctionParameterValue(parameters, parameters.size() - 1);
+    if (param.isInt()) {
+      datas->get<int>()[indice] = param.toInt64();
+      return;
+    } else if (param.isfloatOrDouble()) {
+      datas->get<int>()[indice] = (int)param.toDouble();
+    } else if (param.canTurnIntoNdarray()) {
+      auto array = param.getTurnIntoNdarray();
+      auto arrayPtr = getNdarrayPtr(array);
+      if (arrayPtr->getValueType() == arangodb::aql::Ndarray::INT_TYPE) {
+        datas->get<int>()[indice] = (int)arrayPtr->get<int>()[{}];
+      } else if (arrayPtr->getValueType() ==
+                 arangodb::aql::Ndarray::FLOAT_TYPE) {
+        datas->get<int>()[indice] = (int)arrayPtr->get<float>()[{}];
+      } else {
+        datas->get<int>()[indice] = (int)arrayPtr->get<double>()[{}];
+      }
+    }
   }
 
   AqlValue get() const override {
@@ -927,7 +986,12 @@ struct AggregatorToNdArrayi final : public AggregatorNeedDynamicMemory {
     for (auto const& i : arangodb::velocypack::ArrayIterator(infoSlice)) {
       int length = 0;
       try {
-        length = i["length"].getInt();
+        if (i["length"].isDouble()) {
+          length = i["length"].getDouble();
+        } else {
+          length = i["length"].getInt();
+        }
+
         if (i.hasKey("axis") && i["axis"].isString()) {
           axisNames.push_back(i["axis"].copyString());
         } else {
@@ -945,7 +1009,7 @@ struct AggregatorToNdArrayi final : public AggregatorNeedDynamicMemory {
 
       n = n * (length + 1);
     }
-    if (n > MaterializationLimit) {
+    if (n > MaterializationLimit * 10000) {
       THROW_ARANGO_EXCEPTION_MESSAGE(TRI_ERROR_QUERY_PARSE,
                                      "it is too big to be materialized");
     }

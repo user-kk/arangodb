@@ -174,7 +174,8 @@ frozen::unordered_map<int, std::string_view, 80> kTypeNames{
     {static_cast<int>(NODE_TYPE_FOR_VIEW), "view enumeration"},
     {static_cast<int>(NODE_TYPE_ARRAY_FILTER), "array filter"},
     {static_cast<int>(NODE_TYPE_WINDOW), "window"},
-};
+    {static_cast<int>(NODE_TYPE_RANGE_INDEX), "RANGE_INDEX"},
+    {static_cast<int>(NODE_TYPE_NAME_INDEX), "NAME_INDEX"}};
 
 /// @brief names for AST node value types
 frozen::unordered_map<int, std::string_view, 5> kValueTypeNames{

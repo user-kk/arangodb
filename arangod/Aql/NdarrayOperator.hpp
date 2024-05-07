@@ -405,6 +405,45 @@ class NdarrayOperator {
     return ret;
   }
 
+  static double norm2(const Ndarray* array) {
+    if (array->_type == Ndarray::INT_TYPE) {
+      return xt::sqrt(xt::sum(xt::pow(array->get<int>(), 2)))[{}];
+    } else if (array->_type == Ndarray::FLOAT_TYPE) {
+      return xt::sqrt(xt::sum(xt::pow(array->get<float>(), 2)))[{}];
+    } else {
+      return xt::sqrt(xt::sum(xt::pow(array->get<double>(), 2)))[{}];
+    }
+  }
+  // min-max标准化
+  static Ndarray* normalization(const Ndarray* array) {
+    Ndarray* ret = new Ndarray;
+    ret->_type = Ndarray::DOUBLE_TYPE;
+    if (array->_type == Ndarray::INT_TYPE) {
+      auto& matrix = array->get<int>();
+
+      xt::xarray<double> max_values = xt::amax(matrix, 1);
+      xt::xarray<double> result =
+          xt::eval(matrix / xt::expand_dims(max_values, 1));
+      ret->_data = std::move(result);
+
+    } else if (array->_type == Ndarray::FLOAT_TYPE) {
+      auto& matrix = array->get<float>();
+      xt::xarray<double> max_values = xt::amax(matrix, 1);
+      xt::xarray<double> result =
+          xt::eval(matrix / xt::expand_dims(max_values, 1));
+      ret->_data = std::move(result);
+
+    } else {
+      auto& matrix = array->get<double>();
+      xt::xarray<double> max_values = xt::amax(matrix, 1);
+      xt::xarray<double> result =
+          xt::eval(matrix / xt::expand_dims(max_values, 1));
+      ret->_data = std::move(result);
+    }
+
+    return ret;
+  }
+
   static Ndarray* exp(const Ndarray* array) {
     Ndarray* ret = new Ndarray;
     xt::xarray<double> v;

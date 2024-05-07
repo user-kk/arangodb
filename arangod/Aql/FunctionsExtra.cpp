@@ -1,4 +1,5 @@
 #include "Aql/AqlValue.h"
+#include "Aql/AstNode.h"
 #include "Aql/Ndarray.hpp"
 #include "Aql/NdarrayOperator.hpp"
 #include "Functions.h"
@@ -934,17 +935,67 @@ AqlValue functions::NdarrayView(
   return AqlValue(getNdarrayPtr(ptr)->clone());
 }
 
+AqlValue functions::Norm2(arangodb::aql::ExpressionContext* expressionContext,
+                          AstNode const&,
+                          VPackFunctionParametersView parameters) {
+  AqlValue value = extractFunctionParameterValue(parameters, 0);
+  if (!value.canTurnIntoNdarray()) {
+    registerWarning(expressionContext, "Norm", TRI_ERROR_QUERY_ARRAY_EXPECTED);
+    return AqlValue(AqlValueHintNull());
+  }
+  auto ptr = value.getTurnIntoNdarray();
+
+  return AqlValue(AqlValueHintDouble(Ndop::norm2(getNdarrayPtr(ptr))));
+}
+
+AqlValue functions::Normalization(
+    arangodb::aql::ExpressionContext* expressionContext, AstNode const&,
+    VPackFunctionParametersView parameters) {
+  AqlValue value = extractFunctionParameterValue(parameters, 0);
+  if (!value.canTurnIntoNdarray()) {
+    registerWarning(expressionContext, "CosineSimilarity",
+                    TRI_ERROR_QUERY_ARRAY_EXPECTED);
+    return AqlValue(AqlValueHintNull());
+  }
+  auto ptr = value.getTurnIntoNdarray();
+
+  return AqlValue(Ndop::normalization(getNdarrayPtr(ptr)));
+}
+
 namespace {
-std::atomic<size_t> count = 0;
-std::atomic<void*> current = nullptr;
+size_t count = 0;
+const AstNode* current = nullptr;
+
+AqlValue currentValue;
+const AstNode* current2 = nullptr;
+size_t count2 = 0;
 }  // namespace
 
 AqlValue functions::RowNumber(
     arangodb::aql::ExpressionContext* expressionContext, AstNode const& node,
     VPackFunctionParametersView parameters) {
-  if (current.load() != &node) {
-    current.store((void*)&node);
+  if (current != &node) {
+    current = &node;
     count = 0;
   }
   return AqlValue(AqlValueHintUInt(count++));
+}
+
+AqlValue functions::DenseRank(
+    arangodb::aql::ExpressionContext* expressionContext, AstNode const& node,
+    VPackFunctionParametersView parameters) {
+  AqlValue value = extractFunctionParameterValue(parameters, 0);
+  if (current2 != &node) {
+    current2 = &node;
+    count2 = 0;
+    currentValue = value.clone();
+    return AqlValue(AqlValueHintUInt(0));
+  }
+
+  if (AqlValue::Compare(nullptr, currentValue, value, false) != 0) {
+    currentValue.destroy();
+    currentValue = value.clone();
+    count2++;
+  }
+  return AqlValue(AqlValueHintUInt(count2));
 }

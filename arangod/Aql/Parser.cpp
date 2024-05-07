@@ -325,7 +325,11 @@ void arangodb::aql::Parser::produceAlias() {
       if (Aggregator::isValid(f->name)) {
         continue;  // 聚集函数不产生别名
       }
-      // 普通函数生成别名
+      // 普通函数生成别名,除了row_number和dense_rank函数
+      // 这两个函数如果生成别名会被不同的节点连续重复调用两次,这是被禁止的
+      if (f->name == "ROW_NUMBER" || f->name == "DENSE_RANK") {
+        continue;
+      }
     }
 
     Variable* vPtr = nullptr;

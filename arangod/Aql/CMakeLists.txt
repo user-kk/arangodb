@@ -193,13 +193,19 @@ endif()
 
 add_subdirectory(Optimizer)
 
-target_link_libraries(arango_aql
+target_include_directories(arango_aql PUBLIC ${xtensor_INCLUDE_DIRS})
+
+target_link_libraries(arango_aql PUBLIC
   arango_geo
   arango_graph
   arango_indexes
   arango_iresearch
   arango_network
   immer
+  )
+
+
+target_link_libraries(arango_aql PRIVATE   
   xtensor
   xtensor::optimize 
   xtensor::use_xsimd
@@ -208,7 +214,7 @@ target_link_libraries(arango_aql
   )
 
 target_compile_definitions(arango_aql PUBLIC -DHAVE_CBLAS=1)
-target_include_directories(arango_aql PUBLIC ${xtensor_INCLUDE_DIRS})
+
 
 target_include_directories(arango_aql PRIVATE
   "${PROJECT_SOURCE_DIR}/arangod"

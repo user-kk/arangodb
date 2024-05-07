@@ -347,7 +347,12 @@ AqlValue NdarrayWhere(arangodb::aql::ExpressionContext*, AstNode const&,
                       VPackFunctionParametersView);
 AqlValue RowNumber(arangodb::aql::ExpressionContext*, AstNode const&,
                    VPackFunctionParametersView);
-
+AqlValue DenseRank(arangodb::aql::ExpressionContext*, AstNode const&,
+                   VPackFunctionParametersView);
+AqlValue Norm2(arangodb::aql::ExpressionContext*, AstNode const&,
+               VPackFunctionParametersView);
+AqlValue Normalization(arangodb::aql::ExpressionContext*, AstNode const&,
+                       VPackFunctionParametersView);
 AqlValue Sum(arangodb::aql::ExpressionContext*, AstNode const&,
              VPackFunctionParametersView);
 AqlValue Average(arangodb::aql::ExpressionContext*, AstNode const&,

@@ -322,6 +322,17 @@
       }
     },
     {
+      "name": "myDbuild",
+      "description": "",
+      "displayName": "",
+      "inherits": [
+        "mybuild"
+      ],
+      "cacheVariables": {
+        "STATIC_EXECUTABLES": "Off"
+      }
+    },
+    {
       "name": "myRelease",
       "inherits": "release-base",
       "displayName": "myRelease",

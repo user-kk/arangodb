@@ -638,3 +638,91 @@ void arangodb::aql::Parser::processOrderBy(AstNode* arrayNode) {
     }
   }
 };
+bool arangodb::aql::Parser::updateStartNode(AstNode* expression,
+                                            std::string_view startNodeName) {
+  if (sqlGraphInfo == nullptr) {
+    return false;
+  }
+
+  if (sqlGraphInfo->startNodeUpdated) {
+    return false;
+  }
+
+  // 重新设置方向和重新生成变量
+
+  auto it =
+      std::ranges::find_if(sqlGraphInfo->varNames, [startNodeName](AstNode* p) {
+        if (p->type != NODE_TYPE_NOP && p->getString() == startNodeName) {
+          return true;
+        }
+        return false;
+      });
+  if (it == sqlGraphInfo->varNames.end()) {
+    return false;
+  }
+  auto pos = it - sqlGraphInfo->varNames.begin();
+  switch (pos) {
+    case 0: {
+      // 方向不用重新设置,只需要生成变量
+      // point
+      AstNode* point = _ast.createNodeVariable(
+          sqlGraphInfo->varNames[2]->getStringView(), true);
+      *(sqlGraphInfo->varNodes->members[0]) = *point;
+      // edge
+      if (sqlGraphInfo->varNames[1]->type != NODE_TYPE_NOP) {
+        AstNode* edge = _ast.createNodeVariable(
+            sqlGraphInfo->varNames[1]->getStringView(), true);
+        *(sqlGraphInfo->varNodes->members[1]) = *edge;
+      } else {
+        if (sqlGraphInfo->nodeTraversal != nullptr) {
+          sqlGraphInfo->nodeTraversal->members.pop_back();
+        } else {
+          sqlGraphInfo->varNodes->members.pop_back();
+        }
+      }
+      break;
+    }
+    case 1: {
+      _query.warnings().registerError(TRI_ERROR_QUERY_PARSE,
+                                      "edge cannot be as a startNode");
+      return false;
+    }
+    case 2: {
+      // 换方向
+      int direction = sqlGraphInfo->directionNode->members[0]->getIntValue();
+      int newDirection = 0;
+      if (direction == 1) {
+        newDirection = 2;
+      } else if (direction == 2) {
+        newDirection = 1;
+      }
+      sqlGraphInfo->directionNode->members[0] =
+          _ast.createNodeValueInt(newDirection);
+
+      // 生成变量
+      // point
+      AstNode* point = _ast.createNodeVariable(
+          sqlGraphInfo->varNames[0]->getStringView(), true);
+      *(sqlGraphInfo->varNodes->members[0]) = *point;
+      // edge
+      if (sqlGraphInfo->varNames[1]->type != NODE_TYPE_NOP) {
+        AstNode* edge = _ast.createNodeVariable(
+            sqlGraphInfo->varNames[1]->getStringView(), true);
+        *(sqlGraphInfo->varNodes->members[1]) = *edge;
+      } else {
+        if (sqlGraphInfo->nodeTraversal != nullptr) {
+          sqlGraphInfo->nodeTraversal->members.pop_back();
+        }
+        sqlGraphInfo->varNodes->members.pop_back();
+      }
+      break;
+    }
+    default: {
+      TRI_ASSERT(false);
+    }
+  }
+
+  *(sqlGraphInfo->startNode) = *expression;
+  sqlGraphInfo->startNodeUpdated = true;
+  return true;
+}

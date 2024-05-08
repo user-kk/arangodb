@@ -153,7 +153,13 @@ class Parser {
     setSQL();
   }
 
-  void endSQL() { _sqlContext.pop_back(); }
+  void endSQL() {
+    _sqlContext.pop_back();
+    if (sqlGraphInfo != nullptr && !sqlGraphInfo->startNodeUpdated) {
+      _query.warnings().registerError(TRI_ERROR_QUERY_PARSE,
+                                      "startNode is not be set");
+    }
+  }
 
   void beginSelect() { sqlContext()._isSelect = true; }
 
@@ -289,22 +295,33 @@ class Parser {
     AstNode* directionNode = nullptr;
     AstNode* startNode = nullptr;
     AstNode* collectionNode = nullptr;
+    AstNode* nodeTraversal = nullptr;
+    std::vector<AstNode*> varNames;
+    bool startNodeUpdated = false;
   };
 
   std::unique_ptr<SQLGraphInfo> sqlGraphInfo;
 
-  void beginGraph() { sqlGraphInfo = std::make_unique<SQLGraphInfo>(); }
-
-  void setGraphVarNodes(AstNode* p1, AstNode* e, AstNode* p2) {
-    sqlGraphInfo->startNode = p1;
-    AstNode* array = _ast.createNodeArray();
-    AstNode* p2Var = _ast.createNodeVariable(p2->getStringView(), true);
-    array->members.push_back(p2Var);
-
-    if (e->type != NODE_TYPE_NOP) {
-      AstNode* eVar = _ast.createNodeVariable(e->getStringView(), true);
-      array->members.push_back(eVar);
+  void beginGraph() {
+    if (sqlGraphInfo != nullptr && !sqlGraphInfo->startNodeUpdated) {
+      _query.warnings().registerError(TRI_ERROR_QUERY_PARSE,
+                                      "startNode is not be set");
     }
+    sqlGraphInfo = std::make_unique<SQLGraphInfo>();
+  }
+
+  ///@brief 这个变量只是暂时的,后面会被修改
+  void setGraphVarNodes(AstNode* p1, AstNode* e, AstNode* p2) {
+    sqlGraphInfo->varNames.push_back(p1);
+    sqlGraphInfo->varNames.push_back(e);
+    sqlGraphInfo->varNames.push_back(p2);
+
+    sqlGraphInfo->startNode = _ast.createNodeValueInt(1);
+
+    AstNode* array = _ast.createNodeArray();
+    array->members.push_back(_ast.createNodeValueInt(1));
+    array->members.push_back(_ast.createNodeValueInt(1));
+
     sqlGraphInfo->varNodes = array;
   }
 
@@ -316,7 +333,9 @@ class Parser {
     infoNode->addMember(_ast.createNodeNop());
     infoNode->addMember(_ast.createNodeNop());
 
-    return _ast.createNodeTraversal(sqlGraphInfo->varNodes, infoNode);
+    sqlGraphInfo->nodeTraversal =
+        _ast.createNodeTraversal(sqlGraphInfo->varNodes, infoNode);
+    return sqlGraphInfo->nodeTraversal;
   }
 
   AstNode* buildNodeDirection(int direction, AstNode* step) {
@@ -327,18 +346,8 @@ class Parser {
     return _ast.createNodeDirection(direction, step);
   }
 
-  bool updateStartNode(AstNode* expression, std::string_view startNodeName) {
-    if (sqlGraphInfo == nullptr) {
-      return false;
-    }
-
-    if (sqlGraphInfo->startNode->getString() != startNodeName) {
-      return false;
-    }
-
-    *(sqlGraphInfo->startNode) = *expression;
-    return true;
-  }
+  ///@brief 设置起始点,根据起始点生成变量和重新设置方向
+  bool updateStartNode(AstNode* expression, std::string_view startNodeName);
 
  private:
   struct SQLContext;

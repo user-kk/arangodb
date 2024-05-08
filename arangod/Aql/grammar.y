@@ -2636,15 +2636,12 @@ collection_element:
     collection_pair {
 
     }
-  | collection_pair T_JOIN collection_pair T_ON expression {
+  | collection_element T_JOIN collection_pair T_ON expression {
       auto node = parser->ast()->createNodeFilter($5);
       parser->ast()->addOperation(node);
     }
-  | collection_pair T_JOIN collection_pair T_ON expression T_START_AS variable_name {
-     bool success= parser->updateStartNode($5,std::string_view{$7.value, $7.length});
-     if(!success){
-      parser->registerParseError(TRI_ERROR_QUERY_PARSE, "start_as error", yylloc.first_line, yylloc.first_column);
-     }
+  | collection_element T_JOIN collection_pair T_ON start_as {
+     
     }
 ;
 
@@ -2699,7 +2696,7 @@ collection_pair:
     } unnest_statement {
 
     }
-  | T_STRING {parser->beginGraph(); } T_MATCH graph_info {
+  | T_STRING {parser->beginGraph(); } T_MATCH graph_info start_as {
 
     parser->ast()->scopes()->start(arangodb::aql::AQL_SCOPE_FOR);
 
@@ -2713,6 +2710,17 @@ collection_pair:
 
 
   } 
+  ;
+start_as:
+    /*empty*/{
+
+    }
+  | expression T_START_AS variable_name{
+      bool success= parser->updateStartNode($1,std::string_view{$3.value, $3.length});
+      if(!success){
+       parser->registerParseError(TRI_ERROR_QUERY_PARSE, "start_as error", yylloc.first_line, yylloc.first_column);
+      }
+    }
   ;
 graph_info:
     point T_MINUS edge T_MINUS T_GT step point{

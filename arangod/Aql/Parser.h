@@ -140,6 +140,7 @@ class Parser {
   void pushObjectElement(AstNode*, AstNode*);
 
   void pushObjectElement(std::string_view, std::string_view);
+  void pushObjectElement(std::string_view, AstNode*);
 
   /// @brief push a temporary value on the parser's stack
   void pushStack(void*);
@@ -338,6 +339,35 @@ class Parser {
     sqlGraphInfo->varNodes = array;
   }
 
+  void setGraphVarNodesAllShortest(AstNode* v1, AstNode* e, AstNode* v2,
+                                   AstNode* path) {
+    if (path->type == NODE_TYPE_NOP) {
+      _query.warnings().registerError(
+          TRI_ERROR_QUERY_PARSE,
+          "path must be bound in all_shortest/k_shortest/any_k");
+      return;
+    }
+
+    if (e->type != NODE_TYPE_NOP) {
+      _query.warnings().registerError(
+          TRI_ERROR_QUERY_PARSE,
+          "edge cannot be bound in all_shortest/k_shortest/any_k");
+      return;
+    }
+
+    sqlGraphInfo->varNames.push_back(v1);
+    sqlGraphInfo->varNames.push_back(v2);
+
+    sqlGraphInfo->startNode = _ast.createNodeValueInt(1);
+    sqlGraphInfo->endNode = _ast.createNodeValueInt(1);
+
+    AstNode* array = _ast.createNodeArray();
+    AstNode* pathNode = _ast.createNodeVariable(path->getStringView(), true);
+    array->members.push_back(pathNode);
+
+    sqlGraphInfo->varNodes = array;
+  }
+
   void setGraphVarNodes(AstNode* v1, AstNode* e, AstNode* v2,
                         std::string_view pathPointName) {
     sqlGraphInfo->varNames.push_back(v1);
@@ -371,7 +401,7 @@ class Parser {
     return sqlGraphInfo->nodeTraversal;
   }
 
-  AstNode* buildNodeShortest(AstNode* option) {
+  AstNode* buildNodeAnyShortest(AstNode* option) {
     auto infoNode = _ast.createNodeArray();
     infoNode->addMember(sqlGraphInfo->directionNode);
     infoNode->addMember(sqlGraphInfo->startNode);
@@ -382,7 +412,56 @@ class Parser {
     return _ast.createNodeShortestPath(sqlGraphInfo->varNodes, infoNode);
   }
 
-  AstNode* buildNodeDirection(int direction, AstNode* step) {
+  AstNode* buildNodeAllShortest() {
+    auto infoNode = _ast.createNodeArray();
+    infoNode->addMember(sqlGraphInfo->directionNode);
+    infoNode->addMember(sqlGraphInfo->startNode);
+    infoNode->addMember(sqlGraphInfo->endNode);
+    infoNode->addMember(sqlGraphInfo->collectionNode);
+    infoNode->addMember(_ast.createNodeNop());
+
+    return _ast.createNodeEnumeratePaths(
+        arangodb::graph::PathType::Type::AllShortestPaths,
+        sqlGraphInfo->varNodes, infoNode);
+  }
+
+  AstNode* buildNodeKShortest(AstNode* option) {
+    auto infoNode = _ast.createNodeArray();
+    infoNode->addMember(sqlGraphInfo->directionNode);
+    infoNode->addMember(sqlGraphInfo->startNode);
+    infoNode->addMember(sqlGraphInfo->endNode);
+    infoNode->addMember(sqlGraphInfo->collectionNode);
+    infoNode->addMember(option);
+
+    return _ast.createNodeEnumeratePaths(
+        arangodb::graph::PathType::Type::KShortestPaths, sqlGraphInfo->varNodes,
+        infoNode);
+  }
+
+  AstNode* buildNodeAnyK(AstNode* option) {
+    auto infoNode = _ast.createNodeArray();
+    infoNode->addMember(sqlGraphInfo->directionNode);
+    infoNode->addMember(sqlGraphInfo->startNode);
+    infoNode->addMember(sqlGraphInfo->endNode);
+    infoNode->addMember(sqlGraphInfo->collectionNode);
+    infoNode->addMember(option);
+
+    return _ast.createNodeEnumeratePaths(
+        arangodb::graph::PathType::Type::KPaths, sqlGraphInfo->varNodes,
+        infoNode);
+  }
+
+  AstNode* buildNodeDirection(int direction, AstNode* step,
+                              bool mustStep = false) {
+    if (mustStep) {
+      if (step->type == NODE_TYPE_NOP) {
+        _query.warnings().registerError(TRI_ERROR_QUERY_PARSE,
+                                        "step must be set");
+        return nullptr;
+      }
+      TRI_ASSERT(step->type == NODE_TYPE_RANGE);
+      return _ast.createNodeDirection(direction, step);
+    }
     if (step->type == NODE_TYPE_NOP) {
       return _ast.createNodeDirection(direction, 1);
     }

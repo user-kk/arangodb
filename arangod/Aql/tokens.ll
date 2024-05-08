@@ -293,8 +293,24 @@ class Parser;
   return T_ANY_SHORTEST;
 }
 
+(?i:ALL_SHORTEST) {
+  return T_ALL_SHORTEST;
+}
+
+(?i:K_SHORTEST) {
+  return T_K_SHORTEST;
+}
+
+(?i:K_ANY) {
+  return T_K_ANY;
+}
+
 (?i:COST) {
   return T_COST;
+}
+
+(?i:COST_DEFAULT) {
+  return T_COST_DEFAULT;
 }
 
  /* ---------------------------------------------------------------------------

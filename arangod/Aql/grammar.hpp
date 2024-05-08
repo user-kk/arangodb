@@ -145,16 +145,20 @@ extern int Aqldebug;
     T_ACYCLIC = 345,               /* "acyclic"  */
     T_SIMPLE = 346,                /* "simple"  */
     T_ANY_SHORTEST = 347,          /* "any_Shortest"  */
-    T_END_AS = 348,                /* "end_as"  */
-    T_COST = 349,                  /* "cost"  */
-    WITH_COLLECTION_LIST = 350,    /* WITH_COLLECTION_LIST  */
-    UMINUS = 351,                  /* UMINUS  */
-    UPLUS = 352,                   /* UPLUS  */
-    UNEGATION = 353,               /* UNEGATION  */
-    FUNCCALL = 354,                /* FUNCCALL  */
-    REFERENCE = 355,               /* REFERENCE  */
-    INDEXED = 356,                 /* INDEXED  */
-    EXPANSION = 357                /* EXPANSION  */
+    T_ALL_SHORTEST = 348,          /* "all_Shortest"  */
+    T_K_SHORTEST = 349,            /* "k_shortest"  */
+    T_K_ANY = 350,                 /* "k_any"  */
+    T_END_AS = 351,                /* "end_as"  */
+    T_COST = 352,                  /* "cost"  */
+    T_COST_DEFAULT = 353,          /* "cost_default"  */
+    WITH_COLLECTION_LIST = 354,    /* WITH_COLLECTION_LIST  */
+    UMINUS = 355,                  /* UMINUS  */
+    UPLUS = 356,                   /* UPLUS  */
+    UNEGATION = 357,               /* UNEGATION  */
+    FUNCCALL = 358,                /* FUNCCALL  */
+    REFERENCE = 359,               /* REFERENCE  */
+    INDEXED = 360,                 /* INDEXED  */
+    EXPANSION = 361                /* EXPANSION  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -173,7 +177,7 @@ union YYSTYPE
   bool                     boolval;
   int64_t                  intval;
 
-#line 176 "grammar.hpp"
+#line 180 "grammar.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;

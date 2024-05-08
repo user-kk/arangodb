@@ -234,6 +234,12 @@ void Parser::pushObjectElement(std::string_view key, std::string_view value) {
   pushObjectElement(keyStr, key.length(), valueNode);
 }
 
+void Parser::pushObjectElement(std::string_view key, AstNode* node) {
+  const char* keyStr = _ast.resources().registerString(key);
+
+  pushObjectElement(keyStr, key.length(), node);
+}
+
 /// @brief push a temporary value on the parser's stack
 void Parser::pushStack(void* value) {
   TRI_ASSERT(value != nullptr);

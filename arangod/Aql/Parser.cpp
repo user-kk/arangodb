@@ -763,3 +763,53 @@ bool arangodb::aql::Parser::updateStartNode(AstNode* expression,
   sqlGraphInfo->startNodeUpdated = true;
   return true;
 }
+bool arangodb::aql::Parser::updateStartEndNode(AstNode* startExpression,
+                                               std::string_view startNodeName,
+                                               AstNode* endExpression,
+                                               std::string_view endNodeName) {
+  if (sqlGraphInfo == nullptr) {
+    return false;
+  }
+
+  if (sqlGraphInfo->startNodeUpdated) {
+    return false;
+  }
+
+  if (startNodeName == endNodeName) {
+    _query.warnings().registerError(TRI_ERROR_QUERY_PARSE,
+                                    "start point cannot be end point");
+    return false;
+  }
+
+  TRI_ASSERT(sqlGraphInfo->varNames.size() == 2);
+
+  bool asc = sqlGraphInfo->varNames[0]->getStringView() == startNodeName &&
+             sqlGraphInfo->varNames[1]->getStringView() == endNodeName;
+  bool desc = sqlGraphInfo->varNames[0]->getStringView() == endNodeName &&
+              sqlGraphInfo->varNames[1]->getStringView() == startNodeName;
+
+  if (!asc && !desc) {
+    _query.warnings().registerError(
+        TRI_ERROR_QUERY_PARSE,
+        "start point and end point not match declaration");
+    return false;
+  }
+
+  if (desc) {
+    // 换方向
+    int direction = sqlGraphInfo->directionNode->members[0]->getIntValue();
+    int newDirection = 0;
+    if (direction == 1) {
+      newDirection = 2;
+    } else if (direction == 2) {
+      newDirection = 1;
+    }
+    sqlGraphInfo->directionNode->members[0] =
+        _ast.createNodeValueInt(newDirection);
+  }
+
+  *(sqlGraphInfo->startNode) = *startExpression;
+  *(sqlGraphInfo->endNode) = *endExpression;
+  sqlGraphInfo->startNodeUpdated = true;
+  return true;
+};

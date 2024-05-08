@@ -273,6 +273,10 @@ class Parser;
   return T_START_AS;
 }
 
+(?i:END_AS) {
+  return T_END_AS;
+}
+
 (?i:TRAIL) {
   return T_TRAIL;
 }
@@ -283,6 +287,14 @@ class Parser;
 
 (?i:SIMPLE) {
   return T_SIMPLE;
+}
+
+(?i:ANY_SHORTEST) {
+  return T_ANY_SHORTEST;
+}
+
+(?i:COST) {
+  return T_COST;
 }
 
  /* ---------------------------------------------------------------------------

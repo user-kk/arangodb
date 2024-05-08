@@ -298,6 +298,7 @@ class Parser {
     AstNode* varNodes = nullptr;
     AstNode* directionNode = nullptr;
     AstNode* startNode = nullptr;
+    AstNode* endNode = nullptr;
     AstNode* collectionNode = nullptr;
     AstNode* nodeTraversal = nullptr;
     std::vector<AstNode*> varNames;
@@ -337,6 +338,26 @@ class Parser {
     sqlGraphInfo->varNodes = array;
   }
 
+  void setGraphVarNodes(AstNode* v1, AstNode* e, AstNode* v2,
+                        std::string_view pathPointName) {
+    sqlGraphInfo->varNames.push_back(v1);
+    sqlGraphInfo->varNames.push_back(v2);
+
+    sqlGraphInfo->startNode = _ast.createNodeValueInt(1);
+    sqlGraphInfo->endNode = _ast.createNodeValueInt(1);
+
+    AstNode* array = _ast.createNodeArray();
+    AstNode* pathPointNode = _ast.createNodeVariable(pathPointName, true);
+    array->members.push_back(pathPointNode);
+
+    if (e->type != NODE_TYPE_NOP) {
+      AstNode* edge = _ast.createNodeVariable(e->getStringView(), true);
+      array->members.push_back(edge);
+    }
+
+    sqlGraphInfo->varNodes = array;
+  }
+
   AstNode* buildNodeTraversal(AstNode* option) {
     auto infoNode = _ast.createNodeArray();
     infoNode->addMember(sqlGraphInfo->directionNode);
@@ -350,6 +371,17 @@ class Parser {
     return sqlGraphInfo->nodeTraversal;
   }
 
+  AstNode* buildNodeShortest(AstNode* option) {
+    auto infoNode = _ast.createNodeArray();
+    infoNode->addMember(sqlGraphInfo->directionNode);
+    infoNode->addMember(sqlGraphInfo->startNode);
+    infoNode->addMember(sqlGraphInfo->endNode);
+    infoNode->addMember(sqlGraphInfo->collectionNode);
+    infoNode->addMember(option);
+
+    return _ast.createNodeShortestPath(sqlGraphInfo->varNodes, infoNode);
+  }
+
   AstNode* buildNodeDirection(int direction, AstNode* step) {
     if (step->type == NODE_TYPE_NOP) {
       return _ast.createNodeDirection(direction, 1);
@@ -360,6 +392,10 @@ class Parser {
 
   ///@brief 设置起始点,根据起始点生成变量和重新设置方向
   bool updateStartNode(AstNode* expression, std::string_view startNodeName);
+  ///@brief 设置起始点和终止点,根据起始点重新设置方向
+  bool updateStartEndNode(AstNode* startExpression,
+                          std::string_view startNodeName,
+                          AstNode* endExpression, std::string_view endNodeName);
 
  private:
   struct SQLContext;

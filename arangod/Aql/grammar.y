@@ -483,6 +483,9 @@ AstNode* transformOutputVariables(Parser* parser, AstNode const* names) {
 %token T_TRAIL "trail"
 %token T_ACYCLIC "acyclic"
 %token T_SIMPLE "simple"
+%token T_ANY_SHORTEST "any_Shortest"
+%token T_END_AS "end_as"
+%token T_COST "cost"
 
 
 
@@ -596,6 +599,7 @@ AstNode* transformOutputVariables(Parser* parser, AstNode const* names) {
 %type <node> edge;
 %type <node> step;
 %type <node> path;
+%type <node> cost_info;
 
 
 /* define start token of language */
@@ -2647,7 +2651,10 @@ collection_element:
   | collection_element T_JOIN collection_pair T_ON start_as {
      
     }
-;
+  | collection_element T_JOIN collection_pair T_ON start_and_end_as {
+     
+    }
+  ;
 
 collection_pair:
     expression T_AS variable_name {
@@ -2700,10 +2707,10 @@ collection_pair:
     } unnest_statement {
 
     }
-  | T_STRING {
+  | T_STRING T_MATCH {
       parser->beginGraph();
       parser->pushObject();
-    } T_MATCH graph_option graph_info start_as {
+    } graph_option graph_info start_as {
 
     auto option= static_cast<AstNode*>(parser->popStack());
     parser->ast()->scopes()->start(arangodb::aql::AQL_SCOPE_FOR);
@@ -2715,10 +2722,71 @@ collection_pair:
     parser->sqlGraphInfo->collectionNode=collectionNode;
     auto traversalNode=parser->buildNodeTraversal(option);
     parser->ast()->addOperation(traversalNode);
-
-
   } 
+  | T_STRING T_MATCH T_ANY_SHORTEST {parser->beginGraph();} graph_info_any_shortest cost_info start_end_as {
+      parser->ast()->scopes()->start(arangodb::aql::AQL_SCOPE_FOR);
+
+      auto node = parser->ast()->createNodeArray();
+      node->addMember(parser->ast()->createNodeValueString($1.value, $1.length));
+      auto const& resolver = parser->query().resolver();
+      auto collectionNode = parser->ast()->createNodeCollectionList(node, resolver);
+      parser->sqlGraphInfo->collectionNode=collectionNode;
+      auto shortestNode=parser->buildNodeShortest($6);
+      parser->ast()->addOperation(shortestNode);
+
+    }
   ;
+cost_info:
+    /*empty*/{
+      AstNode* node = parser->ast()->createNodeNop();
+      $$=node;
+    }
+  | T_COST T_QUOTED_STRING {
+      parser->pushObject();
+      parser->pushObjectElement("weightAttribute",std::string_view{$2.value, $2.length});
+      $$ = static_cast<AstNode*>(parser->popStack());
+    }
+
+start_end_as:
+    /*empty*/{
+
+    }
+  | expression T_START_AS variable_name expression T_END_AS variable_name{
+      bool success= parser->updateStartEndNode($1,std::string_view{$3.value, $3.length},$4,std::string_view{$6.value, $6.length});
+      if(!success){
+       parser->registerParseError(TRI_ERROR_QUERY_PARSE, "start_as end_as error", yylloc.first_line, yylloc.first_column);
+      }
+    }
+  ;
+
+start_and_end_as:
+  expression T_START_AS variable_name T_AND expression T_END_AS variable_name{
+      bool success= parser->updateStartEndNode($1,std::string_view{$3.value, $3.length},$5,std::string_view{$7.value, $7.length});
+      if(!success){
+       parser->registerParseError(TRI_ERROR_QUERY_PARSE, "start_as end_as error", yylloc.first_line, yylloc.first_column);
+      }
+    }
+
+graph_info_any_shortest:
+    point T_MINUS edge T_MINUS T_GT T_TIMES point T_FOR variable_name{
+      auto& info=parser->sqlGraphInfo;
+      info->directionNode=parser->ast()->createNodeDirection(2, 1);//OUTBOUND
+      parser->setGraphVarNodes($1,$3,$7,std::string_view{$9.value, $9.length});
+    }
+  | point T_TIMES T_LT T_MINUS edge T_MINUS point T_FOR variable_name {
+      auto& info=parser->sqlGraphInfo;
+      info->directionNode=parser->ast()->createNodeDirection(1, 1);//INBOUND
+      parser->setGraphVarNodes($1,$5,$7,std::string_view{$9.value, $9.length});
+
+    }
+  | point T_MINUS edge T_MINUS point T_TIMES T_FOR variable_name {
+      auto& info=parser->sqlGraphInfo;
+      info->directionNode=parser->ast()->createNodeDirection(0, 1);//any
+      parser->setGraphVarNodes($1,$3,$5,std::string_view{$8.value, $8.length});
+
+    }
+  ;
+
 graph_option:
     graph_order restrictor{
 

@@ -273,6 +273,18 @@ class Parser;
   return T_START_AS;
 }
 
+(?i:TRAIL) {
+  return T_TRAIL;
+}
+
+(?i:ACYCLIC) {
+  return T_ACYCLIC;
+}
+
+(?i:SIMPLE) {
+  return T_SIMPLE;
+}
+
  /* ---------------------------------------------------------------------------
   * predefined type literals
   * --------------------------------------------------------------------------- */

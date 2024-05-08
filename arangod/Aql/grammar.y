@@ -480,6 +480,9 @@ AstNode* transformOutputVariables(Parser* parser, AstNode const* names) {
 %token T_ON "on"
 %token T_MATCH "match"
 %token T_START_AS "start_as"
+%token T_TRAIL "trail"
+%token T_ACYCLIC "acyclic"
+%token T_SIMPLE "simple"
 
 
 
@@ -592,6 +595,7 @@ AstNode* transformOutputVariables(Parser* parser, AstNode const* names) {
 %type <node> point;
 %type <node> edge;
 %type <node> step;
+%type <node> path;
 
 
 /* define start token of language */
@@ -2696,8 +2700,12 @@ collection_pair:
     } unnest_statement {
 
     }
-  | T_STRING {parser->beginGraph(); } T_MATCH graph_info start_as {
+  | T_STRING {
+      parser->beginGraph();
+      parser->pushObject();
+    } T_MATCH graph_option graph_info start_as {
 
+    auto option= static_cast<AstNode*>(parser->popStack());
     parser->ast()->scopes()->start(arangodb::aql::AQL_SCOPE_FOR);
 
     auto node = parser->ast()->createNodeArray();
@@ -2705,11 +2713,41 @@ collection_pair:
     auto const& resolver = parser->query().resolver();
     auto collectionNode = parser->ast()->createNodeCollectionList(node, resolver);
     parser->sqlGraphInfo->collectionNode=collectionNode;
-    auto traversalNode=parser->buildNodeTraversal();
+    auto traversalNode=parser->buildNodeTraversal(option);
     parser->ast()->addOperation(traversalNode);
 
 
   } 
+  ;
+graph_option:
+    graph_order restrictor{
+
+    }
+  ;
+graph_order:
+  /*empty*/{
+
+    }
+  | T_ORDER T_STRING {
+      auto node = parser->ast()->createNodeValueString($2.value, $2.length);
+      const char* name = parser->ast()->resources().registerString("order");
+      parser->pushObjectElement(name, 5,node);
+    }
+  ;
+restrictor:
+    /*empty*/{
+
+    }
+  | T_TRAIL {
+      parser->pushObjectElement("uniqueVertices","path");
+    }
+  | T_ACYCLIC {
+      parser->pushObjectElement("uniqueEdges","path");
+    }
+  | T_SIMPLE {
+      parser->pushObjectElement("uniqueVertices","path");
+      parser->pushObjectElement("uniqueEdges","path");
+    }
   ;
 start_as:
     /*empty*/{
@@ -2723,27 +2761,39 @@ start_as:
     }
   ;
 graph_info:
-    point T_MINUS edge T_MINUS T_GT step point{
+    path point T_MINUS edge T_MINUS T_GT step point{
       //默认步长为1
       auto& info=parser->sqlGraphInfo;
-      info->directionNode=parser->buildNodeDirection(2, $6);//OUTBOUND
-      parser->setGraphVarNodes($1,$3,$7);
+      info->directionNode=parser->buildNodeDirection(2, $7);//OUTBOUND
+      parser->setGraphVarNodes($2,$4,$8,$1);
       
 
     }
-  | point T_LT T_MINUS edge T_MINUS step point{
+  | path point T_LT T_MINUS edge T_MINUS step point{
       auto& info=parser->sqlGraphInfo;
-      info->directionNode=parser->buildNodeDirection(1, $6);//INBOUND
-      parser->setGraphVarNodes($1,$4,$7);
+      info->directionNode=parser->buildNodeDirection(1, $7);//INBOUND
+      parser->setGraphVarNodes($2,$5,$8,$1);
 
     }
-  | point T_MINUS edge T_MINUS step point  {
+  | path point T_MINUS edge T_MINUS step point  {
       auto& info=parser->sqlGraphInfo;
-      info->directionNode=parser->buildNodeDirection(0, $5);//any
-      parser->setGraphVarNodes($1,$3,$6);
+      info->directionNode=parser->buildNodeDirection(0, $6);//any
+      parser->setGraphVarNodes($2,$4,$7,$1);
 
     }
   ;
+
+path:
+    /*empty*/{
+      AstNode* node = parser->ast()->createNodeNop();
+      $$=node;
+    }
+  | variable_name T_ASSIGN {
+      AstNode* node = parser->ast()->createNodeValueString($1.value, $1.length);
+      $$=node;
+    }
+  ;
+
 point:
   T_OPEN variable_name T_CLOSE {
     AstNode* node = parser->ast()->createNodeValueString($2.value, $2.length);
@@ -2761,6 +2811,10 @@ edge:
       AstNode* node = parser->ast()->createNodeNop();
       $$=node;
     }
+  | /*empty*/ {
+      AstNode* node = parser->ast()->createNodeNop();
+      $$=node;
+    }
   ;
 step:
     /*empty*/{
@@ -2768,6 +2822,10 @@ step:
     }
   | T_OBJECT_OPEN expression T_COMMA expression T_OBJECT_CLOSE {
       $$=parser->ast()->createNodeRange($2, $4);
+
+    }
+  | T_OBJECT_OPEN expression T_OBJECT_CLOSE {
+      $$=parser->ast()->createNodeRange($2, $2);
 
     }
   ;

@@ -184,6 +184,8 @@ void Parser::pushArray(AstNode* array) {
   pushStack(array);
 }
 
+void Parser::pushObject() { pushStack(_ast.createNodeObject()); }
+
 /// @brief pop an array value from the parser's stack
 /// the array must have been added to the stack via pushArray
 AstNode* Parser::popArray() {
@@ -221,6 +223,15 @@ void Parser::pushObjectElement(AstNode* attributeName, AstNode* node) {
   TRI_ASSERT(object->type == NODE_TYPE_OBJECT);
   auto element = _ast.createNodeCalculatedObjectElement(attributeName, node);
   object->addMember(element);
+}
+
+void Parser::pushObjectElement(std::string_view key, std::string_view value) {
+  const char* keyStr = _ast.resources().registerString(key);
+  const char* valueStr = _ast.resources().registerString(value);
+
+  AstNode* valueNode = _ast.createNodeValueString(valueStr, value.length());
+
+  pushObjectElement(keyStr, key.length(), valueNode);
 }
 
 /// @brief push a temporary value on the parser's stack
@@ -680,6 +691,17 @@ bool arangodb::aql::Parser::updateStartNode(AstNode* expression,
           sqlGraphInfo->varNodes->members.pop_back();
         }
       }
+      // path
+      if (sqlGraphInfo->varNames[3]->type != NODE_TYPE_NOP) {
+        AstNode* path = _ast.createNodeVariable(
+            sqlGraphInfo->varNames[3]->getStringView(), true);
+        if (sqlGraphInfo->nodeTraversal != nullptr) {  // start_as 写在on子句中
+          sqlGraphInfo->nodeTraversal->members.push_back(path);
+        } else {  // start_as 写在外面
+          sqlGraphInfo->varNodes->members.push_back(path);
+        }
+      }
+
       break;
     }
     case 1: {
@@ -715,7 +737,22 @@ bool arangodb::aql::Parser::updateStartNode(AstNode* expression,
         }
         sqlGraphInfo->varNodes->members.pop_back();
       }
+      // path
+      if (sqlGraphInfo->varNames[3]->type != NODE_TYPE_NOP) {
+        AstNode* path = _ast.createNodeVariable(
+            sqlGraphInfo->varNames[3]->getStringView(), true);
+        if (sqlGraphInfo->nodeTraversal != nullptr) {  // start_as 写在on子句中
+          sqlGraphInfo->nodeTraversal->members.push_back(path);
+        } else {  // start_as 写在外面
+          sqlGraphInfo->varNodes->members.push_back(path);
+        }
+      }
       break;
+    }
+    case 3: {
+      _query.warnings().registerError(TRI_ERROR_QUERY_PARSE,
+                                      "path cannot be as a startNode");
+      return false;
     }
     default: {
       TRI_ASSERT(false);

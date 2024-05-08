@@ -124,6 +124,8 @@ class Parser {
   /// the array must be removed from the stack via popArray
   void pushArray(AstNode* array);
 
+  void pushObject();
+
   /// @brief pop an array value from the parser's stack
   /// the array must have been added to the stack via pushArray
   AstNode* popArray();
@@ -136,6 +138,8 @@ class Parser {
 
   /// @brief push an AstNode into the object element on top of the stack
   void pushObjectElement(AstNode*, AstNode*);
+
+  void pushObjectElement(std::string_view, std::string_view);
 
   /// @brief push a temporary value on the parser's stack
   void pushStack(void*);
@@ -311,10 +315,18 @@ class Parser {
   }
 
   ///@brief 这个变量只是暂时的,后面会被修改
-  void setGraphVarNodes(AstNode* p1, AstNode* e, AstNode* p2) {
-    sqlGraphInfo->varNames.push_back(p1);
+  void setGraphVarNodes(AstNode* v1, AstNode* e, AstNode* v2, AstNode* path) {
+    if (path->type != NODE_TYPE_NOP && e->type == NODE_TYPE_NOP) {
+      _query.warnings().registerError(
+          TRI_ERROR_QUERY_PARSE,
+          "Edge nodes must be bound when paths are bound");
+      return;
+    }
+
+    sqlGraphInfo->varNames.push_back(v1);
     sqlGraphInfo->varNames.push_back(e);
-    sqlGraphInfo->varNames.push_back(p2);
+    sqlGraphInfo->varNames.push_back(v2);
+    sqlGraphInfo->varNames.push_back(path);
 
     sqlGraphInfo->startNode = _ast.createNodeValueInt(1);
 
@@ -325,13 +337,13 @@ class Parser {
     sqlGraphInfo->varNodes = array;
   }
 
-  AstNode* buildNodeTraversal() {
+  AstNode* buildNodeTraversal(AstNode* option) {
     auto infoNode = _ast.createNodeArray();
     infoNode->addMember(sqlGraphInfo->directionNode);
     infoNode->addMember(sqlGraphInfo->startNode);
     infoNode->addMember(sqlGraphInfo->collectionNode);
     infoNode->addMember(_ast.createNodeNop());
-    infoNode->addMember(_ast.createNodeNop());
+    infoNode->addMember(option);
 
     sqlGraphInfo->nodeTraversal =
         _ast.createNodeTraversal(sqlGraphInfo->varNodes, infoNode);

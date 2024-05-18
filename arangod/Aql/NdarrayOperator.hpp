@@ -4,7 +4,9 @@
 #include <xtensor/xmath.hpp>
 #include <xtensor/xstrided_view.hpp>
 #include <xtensor/xtensor_forward.hpp>
+#include <xtensor/xrandom.hpp>
 #include "Ndarray.hpp"
+#include <cstdlib>
 namespace arangodb {
 namespace aql {
 
@@ -422,6 +424,12 @@ class NdarrayOperator {
       auto& matrix = array->get<int>();
 
       xt::xarray<double> max_values = xt::amax(matrix, 1);
+      // 防止除0
+      for (auto& i : max_values) {
+        if (std::abs(i) < 1e-6) {
+          i = 1;
+        }
+      }
       xt::xarray<double> result =
           xt::eval(matrix / xt::expand_dims(max_values, 1));
       ret->_data = std::move(result);
@@ -429,6 +437,12 @@ class NdarrayOperator {
     } else if (array->_type == Ndarray::FLOAT_TYPE) {
       auto& matrix = array->get<float>();
       xt::xarray<double> max_values = xt::amax(matrix, 1);
+      // 防止除0
+      for (auto& i : max_values) {
+        if (std::abs(i) < 1e-6) {
+          i = 1;
+        }
+      }
       xt::xarray<double> result =
           xt::eval(matrix / xt::expand_dims(max_values, 1));
       ret->_data = std::move(result);
@@ -436,12 +450,27 @@ class NdarrayOperator {
     } else {
       auto& matrix = array->get<double>();
       xt::xarray<double> max_values = xt::amax(matrix, 1);
+      // 防止除0
+      for (auto& i : max_values) {
+        if (std::abs(i) < 1e-6) {
+          i = 1;
+        }
+      }
       xt::xarray<double> result =
           xt::eval(matrix / xt::expand_dims(max_values, 1));
       ret->_data = std::move(result);
     }
 
     return ret;
+  }
+
+  static Ndarray* rand(const std::vector<int>& shape) {
+    Ndarray* ret = new Ndarray;
+    ret->_type = Ndarray::FLOAT_TYPE;
+    xt::xarray<float> v = xt::random::rand<float>(shape);
+    ret->_data = std::move(v);
+    return ret;
+    return nullptr;
   }
 
   static Ndarray* exp(const Ndarray* array) {
@@ -554,7 +583,11 @@ class NdarrayOperator {
       }
       case MATMUL: {
         if constexpr (is_xarray<T1>::value && is_xarray<T2>::value) {
-          ret->_data.emplace<xt::xarray<T>>(xt::linalg::dot(lhs, rhs));
+          xt::xarray<float> tmpl = lhs;
+          xt::xarray<double> tmpr = rhs;
+
+          xt::xarray<T> tmp = xt::linalg::dot(tmpl, tmpr);
+          ret->_data = std::move(tmp);
         }
         break;
       }

@@ -345,6 +345,8 @@ AqlValue NdarrayCountNonZero(arangodb::aql::ExpressionContext*, AstNode const&,
                              VPackFunctionParametersView);
 AqlValue NdarrayWhere(arangodb::aql::ExpressionContext*, AstNode const&,
                       VPackFunctionParametersView);
+AqlValue NdarrayRand(arangodb::aql::ExpressionContext*, AstNode const&,
+                     VPackFunctionParametersView);
 AqlValue RowNumber(arangodb::aql::ExpressionContext*, AstNode const&,
                    VPackFunctionParametersView);
 AqlValue DenseRank(arangodb::aql::ExpressionContext*, AstNode const&,

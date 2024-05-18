@@ -657,6 +657,7 @@ void AqlFunctionFeature::addNdArrayFunctions() {
   add({"DENSE_RANK", ".", Function::makeFlags(), &functions::DenseRank});
   add({"NORM2", ".", Function::makeFlags(), &functions::Norm2});
   add({"NORMALIZATION", ".", Function::makeFlags(), &functions::Normalization});
+  add({"NDARRAY_RAND", ".", Function::makeFlags(), &functions::NdarrayRand});
 };
 }  // namespace aql
 }  // namespace arangodb

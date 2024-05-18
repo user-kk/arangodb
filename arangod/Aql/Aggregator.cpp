@@ -752,7 +752,8 @@ struct AggregatorToNdArrayf final : public AggregatorNeedDynamicMemory {
     }
 
     // 计算空间
-    static constexpr uint64_t MaterializationLimit = 10ULL * 1000ULL * 1000ULL;
+    static constexpr uint64_t MaterializationLimit =
+        10ULL * 1000ULL * 100000ULL;
     size_t n = 1;
     std::vector<size_t> shape;
     std::vector<std::optional<std::string>> axisNames;

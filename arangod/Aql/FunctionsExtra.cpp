@@ -948,6 +948,28 @@ AqlValue functions::Norm2(arangodb::aql::ExpressionContext* expressionContext,
   return AqlValue(AqlValueHintDouble(Ndop::norm2(getNdarrayPtr(ptr))));
 }
 
+AqlValue functions::NdarrayRand(
+    arangodb::aql::ExpressionContext* expressionContext, AstNode const&,
+    VPackFunctionParametersView parameters) {
+  AqlValue value = extractFunctionParameterValue(parameters, 0);
+  if (!value.isArray()) {
+    registerWarning(expressionContext, "NdarrayRand",
+                    TRI_ERROR_QUERY_ARRAY_EXPECTED);
+    return AqlValue(AqlValueHintNull());
+  }
+
+  std::vector<int> shape;
+  for (auto i : VPackArrayIterator(value.slice())) {
+    if (i.isInteger()) {
+      shape.push_back(i.getInt());
+    } else if (i.isDouble()) {
+      shape.push_back(i.getDouble());
+    }
+  }
+
+  return AqlValue(Ndop::rand(shape));
+}
+
 AqlValue functions::Normalization(
     arangodb::aql::ExpressionContext* expressionContext, AstNode const&,
     VPackFunctionParametersView parameters) {

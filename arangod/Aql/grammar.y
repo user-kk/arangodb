@@ -2929,10 +2929,10 @@ restrictor:
 
     }
   | T_TRAIL {
-      parser->pushObjectElement("uniqueVertices","path");
+      parser->pushObjectElement("uniqueEdges","path"); 
     }
   | T_ACYCLIC {
-      parser->pushObjectElement("uniqueEdges","path");
+      parser->pushObjectElement("uniqueVertices","path");
     }
   | T_SIMPLE {
       parser->pushObjectElement("uniqueVertices","path");

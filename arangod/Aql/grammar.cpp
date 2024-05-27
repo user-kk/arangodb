@@ -6772,7 +6772,7 @@ yyreduce:
   case 341: /* restrictor: "trail"  */
 #line 2931 "grammar.y"
             {
-      parser->pushObjectElement("uniqueVertices","path");
+      parser->pushObjectElement("uniqueEdges","path"); 
     }
 #line 6777 "grammar.cpp"
     break;
@@ -6780,7 +6780,7 @@ yyreduce:
   case 342: /* restrictor: "acyclic"  */
 #line 2934 "grammar.y"
               {
-      parser->pushObjectElement("uniqueEdges","path");
+      parser->pushObjectElement("uniqueVertices","path");
     }
 #line 6785 "grammar.cpp"
     break;
